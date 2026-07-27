@@ -127,13 +127,15 @@
      [x x]
      [else 'no-match])))
 
-;; Record pattern still works on tree-node fields.
-(test-equal "record pattern on tree-node"
-  '(expr ())
-  (match-steer tree-node-protocol
-    (leaf 'expr)
-    [($ tree-node expr children) (list expr children)]
-    [else 'no-match]))
+;; Record patterns ($ struct & object) are reserved for a future design
+;; and disabled in the library.  Kept here as a placeholder.
+;;
+;; (test-equal "record pattern on tree-node"
+;;   '(expr ())
+;;   (match-steer tree-node-protocol
+;;     (leaf 'expr)
+;;     [($ tree-node expr children) (list expr children)]
+;;     [else 'no-match]))
 
 ;; Quasiquote pattern on tree-node.
 (test-equal "quasiquote on tree-node"

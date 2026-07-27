@@ -21,7 +21,9 @@
     match-protocol-rest-children-getter
     match-protocol-first-child-setter
     match-protocol-rest-children-setter
-    :_ ___ **1 =.. *.. *** ? $ struct & object get!)
+    ;; Record-matching keywords ($ struct & object) are reserved for a
+    ;; future design.  They are intentionally disabled for now.
+    :_ ___ **1 =.. *.. *** ? get!)
   (import
     (rnrs base)
     (rnrs lists)
@@ -301,22 +303,25 @@
        (match-extract-vars
         p
         (match-steer-gen-ellipsis/range protocols n m v p r g+s sk fk i) i ()))
-      ((match-steer-two protocols v ($ rec p ...) g+s sk fk i)
-       (if (is-a? v rec)
-           (match-record-refs protocols v rec 0 (p ...) g+s sk fk i)
-           fk))
-      ((match-steer-two protocols v (struct rec p ...) g+s sk fk i)
-       (if (is-a? v rec)
-           (match-record-refs v rec 0 (p ...) g+s sk fk i)
-           fk))
-      ((match-steer-two protocols v (& rec p ...) g+s sk fk i)
-       (if (is-a? v rec)
-           (match-record-named-refs protocols v rec (p ...) g+s sk fk i)
-           fk))
-      ((match-steer-two protocols v (object rec p ...) g+s sk fk i)
-       (if (is-a? v rec)
-           (match-record-named-refs protocols v rec (p ...) g+s sk fk i)
-           fk))
+      ;; Record-matching patterns ($ struct & object) are reserved for a
+      ;; future design and disabled for now.
+      ;;
+      ;; ((match-steer-two protocols v ($ rec p ...) g+s sk fk i)
+      ;;  (if (is-a? v rec)
+      ;;      (match-record-refs protocols v rec 0 (p ...) g+s sk fk i)
+      ;;      fk))
+      ;; ((match-steer-two protocols v (struct rec p ...) g+s sk fk i)
+      ;;  (if (is-a? v rec)
+      ;;      (match-record-refs v rec 0 (p ...) g+s sk fk i)
+      ;;      fk))
+      ;; ((match-steer-two protocols v (& rec p ...) g+s sk fk i)
+      ;;  (if (is-a? v rec)
+      ;;      (match-record-named-refs protocols v rec (p ...) g+s sk fk i)
+      ;;      fk))
+      ;; ((match-steer-two protocols v (object rec p ...) g+s sk fk i)
+      ;;  (if (is-a? v rec)
+      ;;      (match-record-named-refs protocols v rec (p ...) g+s sk fk i)
+      ;;      fk))
       ((match-steer-two protocols v (p . q) g+s sk fk i)
        (let ([p-found (match-steer-find-protocol protocols v)])
          (if p-found
@@ -800,25 +805,28 @@
                     (idx (cdr (assv n: fields-idxs))))
                ((record-mutator rtd idx) rec: val)))))))
 
-  (define-syntax match-record-refs
-    (syntax-rules ()
-      ((_ protocols v rec n (p . q) g+s sk fk i)
-       (let ((rtd (record-rtd v)))
-         (let ((w ((match-cached-accessor rtd n) v)))
-           (match-steer-one protocols w p (((match-cached-accessor rtd n) v) ((match-cached-mutator rtd n) v))
-                      (match-record-refs protocols v rec (+ n 1) q g+s sk fk) fk i))))
-      ((_ protocols v rec n () g+s (sk ...) fk i)
-       (sk ... i))))
-
-  (define-syntax match-record-named-refs
-    (syntax-rules ()
-      ((_ protocols v rec ((f p) . q) g+s sk fk i)
-       (let ((rtd (record-rtd v)))
-         (let ((w ((match-cached-accessor rtd 'f) v)))
-           (match-steer-one protocols w p (((match-cached-accessor rtd 'f) v) ((match-cached-mutator rtd 'f) v))
-                      (match-record-named-refs protocols v rec q g+s sk fk) fk i))))
-      ((_ protocols v rec () g+s (sk ...) fk i)
-       (sk ... i))))
+  ;; Record-matching helpers are reserved for a future design and
+  ;; disabled together with the ($ struct & object) patterns.
+  ;;
+  ;; (define-syntax match-record-refs
+  ;;   (syntax-rules ()
+  ;;     ((_ protocols v rec n (p . q) g+s sk fk i)
+  ;;      (let ((rtd (record-rtd v)))
+  ;;        (let ((w ((match-cached-accessor rtd n) v)))
+  ;;          (match-steer-one protocols w p (((match-cached-accessor rtd n) v) ((match-cached-mutator rtd n) v))
+  ;;                     (match-record-refs protocols v rec (+ n 1) q g+s sk fk) fk i))))
+  ;;     ((_ protocols v rec n () g+s (sk ...) fk i)
+  ;;      (sk ... i))))
+  ;;
+  ;; (define-syntax match-record-named-refs
+  ;;   (syntax-rules ()
+  ;;     ((_ protocols v rec ((f p) . q) g+s sk fk i)
+  ;;      (let ((rtd (record-rtd v)))
+  ;;        (let ((w ((match-cached-accessor rtd 'f) v)))
+  ;;          (match-steer-one protocols w p (((match-cached-accessor rtd 'f) v) ((match-cached-mutator rtd 'f) v))
+  ;;                     (match-record-named-refs protocols v rec q g+s sk fk) fk i))))
+  ;;     ((_ protocols v rec () g+s (sk ...) fk i)
+  ;;      (sk ... i))))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; Extract all identifiers in a pattern.  A little more complicated
