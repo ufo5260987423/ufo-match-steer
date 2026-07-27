@@ -627,6 +627,75 @@
      ([x (leaf 'x)])
      x)))
 
+;; Further edge-case tests.
+
+(test-equal "match-lambda*-steer with zero arguments"
+  'empty
+  ((match-lambda*-steer tree-node-protocol
+     [() 'empty]
+     [else 'non-empty])))
+
+(test-equal "nested match-let-steer and match-let*-steer"
+  '(x y)
+  (match-let-steer tree-node-protocol
+    ([(a b) (list (leaf 'x) (leaf 'y))])
+    (match-let*-steer tree-node-protocol
+      ([c a]
+       [d b])
+      (list (tree-node-expression c) (tree-node-expression d)))))
+
+(test-equal "large ellipsis matching does not overflow"
+  100
+  (length
+   (match-steer tree-node-protocol
+     (map leaf (iota 100))
+     [(a ...) a]
+     [else 'no-match])))
+
+(define (raising-setter . args)
+  (error 'setter "setter should not be called during non-mutating match"))
+
+(define no-setter-protocol
+  (make-match-protocol
+    tree-node?
+    tree-node-expression
+    tree-node-children
+    tree-node-first-child
+    tree-node-rest-children
+    raising-setter
+    raising-setter))
+
+(test-equal "normal patterns do not call setters"
+  'x
+  (tree-node-expression
+   (match-steer no-setter-protocol
+     (tn '(lambda (x) x)
+         (leaf 'lambda)
+         (tn '(x) (leaf 'x))
+         (leaf 'x))
+     [('lambda params body) body]
+     [else 'no-match])))
+
+(test-equal "match-lambda-steer with multiple clauses"
+  'body
+  (tree-node-expression
+   ((match-lambda-steer tree-node-protocol
+      [('lambda params body) body]
+      [('define name value) value]
+      [else 'no-match])
+    (tn '(lambda (x) body)
+        (leaf 'lambda)
+        (tn '(x) (leaf 'x))
+        (leaf 'body)))))
+
+(test-equal "match-letrec-steer nested patterns"
+  '(x y)
+  (let ([result
+         (match-letrec-steer tree-node-protocol
+           ([(a b) (list (leaf 'x) (leaf 'y))])
+           (list (tree-node-expression a) (tree-node-expression b)))])
+    result))
+
 (test-end)
 
 (exit (if (zero? (test-runner-fail-count (test-runner-get))) 0 1))
