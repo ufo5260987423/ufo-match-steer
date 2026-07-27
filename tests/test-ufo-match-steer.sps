@@ -417,6 +417,22 @@
     [() 'empty]
     [else 'non-empty]))
 
+(test-equal "named failure continuation => uses current branch"
+  'matched
+  (match-steer tree-node-protocol
+    (tn '(x y z) (leaf 'x) (leaf 'y) (leaf 'z))
+    [(a b c) (=> fail)
+     (if (eq? 'x (tree-node-expression a)) 'matched (fail))]
+    [else 'fallback]))
+
+(test-equal "named failure continuation => falls through"
+  'fallback
+  (match-steer tree-node-protocol
+    (tn '(a b c) (leaf 'a) (leaf 'b) (leaf 'c))
+    [(a b c) (=> fail)
+     (if (eq? 'x (tree-node-expression a)) 'matched (fail))]
+    [else 'fallback]))
+
 (test-equal "empty list pattern on null tree-node"
   'empty
   (match-steer tree-node-protocol
