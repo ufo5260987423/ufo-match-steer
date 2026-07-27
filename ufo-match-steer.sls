@@ -134,10 +134,11 @@
           ((match-protocol-rest-children-getter p) v))))
 
   (define (match-steer-list? protocols v)
-    (if (pair? v)
-        (list? v)
-        (let ([p (match-steer-find-protocol protocols v)])
-          (and p (list? ((match-protocol-children-getter p) v))))))
+    (or (null? v)
+        (if (pair? v)
+            (list? v)
+            (let ([p (match-steer-find-protocol protocols v)])
+              (and p (list? ((match-protocol-children-getter p) v)))))))
 
   (define (match-steer-length protocols v)
     (if (pair? v)

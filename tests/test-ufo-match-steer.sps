@@ -644,6 +644,21 @@
        [d b])
       (list (tree-node-expression c) (tree-node-expression d)))))
 
+(test-equal "ellipsis on empty ordinary list"
+  '()
+  (match-steer tree-node-protocol
+    '()
+    [(a ...) a]
+    [else 'no-match]))
+
+(test-equal "ellipsis on empty tree-node children binds whole node"
+  'x
+  (tree-node-expression
+   (match-steer tree-node-protocol
+     (leaf 'x)
+     [(a ...) a]
+     [else 'no-match])))
+
 (test-equal "large ellipsis matching does not overflow"
   100
   (length
