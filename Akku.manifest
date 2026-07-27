@@ -1,0 +1,14 @@
+#!r6rs ; -*- mode: scheme; coding: utf-8 -*-
+(import (akku format manifest))
+
+(akku-package ("ufo-match-steer" "1.0.0-alpha.0")
+  (synopsis "Generic pattern matching over arbitrary tree structures")
+  (description
+   "A match macro extension that allows Alex Shinn style list/pair patterns"
+   "to work on any data structure providing a tree access protocol, not just"
+   "Scheme pairs. Useful for matching record-based ASTs such as scheme-langserver"
+   "index-nodes.")
+  (authors "ufo")
+  (license "MIT")
+  (depends ("chez-srfi" ">=0.0.0-akku <1.0.0"))
+)
