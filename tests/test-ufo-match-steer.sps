@@ -147,6 +147,92 @@
      [`(lambda (x) ,body) body]
      [else 'no-match])))
 
+;; P0 tests for the core derived macros and multi-protocol support.
+
+(test-equal "match-lambda-steer"
+  '(x y)
+  (tree-node-expression
+   ((match-lambda-steer tree-node-protocol
+      [('lambda params body) params]
+      [else 'no-match])
+    (tn '(lambda (x y) z)
+        (leaf 'lambda)
+        (tn '(x y) (leaf 'x) (leaf 'y))
+        (leaf 'z)))))
+
+(test-equal "match-lambda*-steer"
+  '(a b c)
+  (node-exprs
+   ((match-lambda*-steer tree-node-protocol
+      [(a b c) (list a b c)]
+      [else 'no-match])
+    (leaf 'a) (leaf 'b) (leaf 'c))))
+
+(test-equal "match-let-steer parallel bindings"
+  '(x y z)
+  (node-exprs
+   (match-let-steer tree-node-protocol
+     ([(a b) (list (leaf 'x) (leaf 'y))]
+      [c (leaf 'z)])
+     (list a b c))))
+
+(test-equal "match-let*-steer sequential bindings"
+  'x
+  (match-let*-steer tree-node-protocol
+    ([(a) (list (leaf 'x))]
+     [b (tree-node-expression a)])
+    b))
+
+(test-equal "match-named-let-steer recursive sum"
+  6
+  ;; match-named-let-steer is exported as the auxiliary behind
+  ;; match-let-steer's named-let form; its direct syntax includes an
+  ;; empty accumulator before the binding clauses.
+  (match-named-let-steer tree-node-protocol sum () ([n 3] [acc 0])
+    (if (= n 0)
+        acc
+        (sum (- n 1) (+ acc n)))))
+
+(test-equal "match-letrec-steer mutually recursive functions"
+  #t
+  (match-letrec-steer tree-node-protocol
+    ([(even? odd?)
+      (list
+       (lambda (n) (if (= n 0) #t (odd? (- n 1))))
+       (lambda (n) (if (= n 0) #f (even? (- n 1)))))])
+    (even? 10)))
+
+;; A second record type to test multi-protocol matching.
+(define-record-type box-node
+  (fields
+    (immutable expression)
+    (immutable child)))
+
+(define (box-node-first-child node)
+  (box-node-child node))
+
+(define (box-node-rest-children node)
+  '())
+
+(define box-node-protocol
+  (make-match-protocol
+    box-node?
+    box-node-expression
+    (lambda (node) (list (box-node-child node)))
+    box-node-first-child
+    box-node-rest-children
+    #f
+    #f))
+
+(test-equal "match-steer with multiple protocols"
+  '(inner)
+  (node-exprs
+   (match-steer (list tree-node-protocol box-node-protocol)
+     (make-box-node 'tree-box (leaf 'inner))
+     [('lambda params body) params]
+     [(x) (list x)]
+     [else 'no-match])))
+
 (test-end)
 
 (exit (if (zero? (test-runner-fail-count (test-runner-get))) 0 1))
