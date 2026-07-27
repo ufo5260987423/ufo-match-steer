@@ -442,6 +442,191 @@
     [() 'empty]
     [else 'non-empty]))
 
+;; Additional boundary and edge-case tests.
+
+(define (catch-error thunk)
+  (guard (e (else 'error-raised))
+    (thunk)
+    'no-error))
+
+(test-equal "no matching pattern raises error"
+  'error-raised
+  (catch-error
+   (lambda ()
+     (match-steer tree-node-protocol (leaf 'x)
+       ['no-such 'ok]))))
+
+(test-equal "=.. too few elements falls through"
+  'too-few
+  (match-steer tree-node-protocol
+    (list (leaf 'a) (leaf 'a))
+    [(a =.. 3) a]
+    [else 'too-few]))
+
+(test-equal "=.. too many elements falls through"
+  'too-many
+  (match-steer tree-node-protocol
+    (list (leaf 'a) (leaf 'a) (leaf 'a) (leaf 'a))
+    [(a =.. 3) a]
+    [else 'too-many]))
+
+(test-equal "*.. below minimum falls through"
+  'below-min
+  (match-steer tree-node-protocol
+    (list (leaf 'a))
+    [(a *.. 2 4) a]
+    [else 'below-min]))
+
+(test-equal "*.. above maximum falls through"
+  'above-max
+  (match-steer tree-node-protocol
+    (list (leaf 'a) (leaf 'a) (leaf 'a) (leaf 'a) (leaf 'a))
+    [(a *.. 2 4) a]
+    [else 'above-max]))
+
+(test-equal "*** captures path variables"
+  '(a b c)
+  (node-exprs
+   (match-steer tree-node-protocol
+     (tn '(a (b (c target)))
+         (leaf 'a)
+         (tn '(b (c target))
+             (leaf 'b)
+             (tn '(c target)
+                 (leaf 'c)
+                 (leaf 'target))))
+     [(path *** 'target) path]
+     [else 'no-match])))
+
+(test-equal "get! pattern on ordinary pair"
+  '(1 2 3)
+  (match-steer tree-node-protocol
+    '(1 2 3)
+    [((get! g) b c) (list (g) b c)]
+    [else 'no-match]))
+
+(test-equal "set! pattern on ordinary pair"
+  '(99 2 3)
+  (let ([v '(1 2 3)])
+    (match-steer tree-node-protocol v
+      [((set! s) b c)
+       (s 99)
+       v]
+      [else 'no-match])))
+
+(test-assert "match-protocol? recognizes protocol"
+  (match-protocol? tree-node-protocol))
+
+(test-equal "match-protocol-predicate works"
+  #t
+  ((match-protocol-predicate tree-node-protocol) (leaf 'x)))
+
+(test-equal "match-protocol-expression-getter works"
+  'x
+  ((match-protocol-expression-getter tree-node-protocol) (leaf 'x)))
+
+(test-equal "match-protocol-children-getter works"
+  '()
+  ((match-protocol-children-getter tree-node-protocol) (leaf 'x)))
+
+(test-equal "match-protocol-first-child-getter works"
+  'a
+  ((match-protocol-expression-getter tree-node-protocol)
+   ((match-protocol-first-child-getter tree-node-protocol)
+    (tn '(a b) (leaf 'a) (leaf 'b)))))
+
+(test-equal "match-protocol-rest-children-getter works"
+  '(b)
+  (map tree-node-expression
+       ((match-protocol-rest-children-getter tree-node-protocol)
+        (tn '(a b) (leaf 'a) (leaf 'b)))))
+
+(test-equal "match-protocol setters are #f for immutable tree-node"
+  '(#f #f)
+  (list
+   (match-protocol-first-child-setter tree-node-protocol)
+   (match-protocol-rest-children-setter tree-node-protocol)))
+
+(define override-protocol
+  (make-match-protocol
+    tree-node?
+    (lambda (node) 'overridden)
+    tree-node-children
+    tree-node-first-child
+    tree-node-rest-children
+    #f
+    #f))
+
+(test-equal "multiple protocols use first matching protocol"
+  'first-wins
+  (match-steer (list override-protocol tree-node-protocol)
+    (leaf 'x)
+    ['overridden 'first-wins]
+    [else 'fallback]))
+
+(test-equal "multiple protocols fall back to later protocol"
+  'later-wins
+  (match-steer (list tree-node-protocol override-protocol)
+    (leaf 'x)
+    [x 'later-wins]
+    [else 'fallback]))
+
+(test-equal "empty protocol list falls back to ordinary pairs"
+  '(1 2 3)
+  (match-steer '()
+    '(1 2 3)
+    [(a b c) (list a b c)]
+    [else 'no-match]))
+
+(test-equal "? predicate without subpattern"
+  'node
+  (match-steer tree-node-protocol
+    (leaf 'x)
+    [(? tree-node?) 'node]
+    [else 'no-match]))
+
+(test-equal "or variable unification"
+  'x
+  (match-steer '()
+    'x
+    [(or (and n (? symbol?)) n) n]
+    [else 'no-match]))
+
+(test-equal "and with not"
+  42
+  (match-steer '()
+    42
+    [(and n (not (? symbol?))) n]
+    [else 'no-match]))
+
+(test-equal "top-level set! pattern"
+  'new
+  (let ([v 'original])
+    (match-steer tree-node-protocol v
+      [(set! s) (s 'new) v]
+      [else 'no-match])))
+
+(test-equal "literal mismatch falls through"
+  'no
+  (match-steer tree-node-protocol
+    (leaf 'x)
+    ['y 'ok]
+    [else 'no]))
+
+(test-equal "vector length mismatch falls through"
+  'no-match
+  (match-steer tree-node-protocol
+    '#(1 2 3)
+    [#(a b) 'short]
+    [else 'no-match]))
+
+(test-equal "match-letrec-steer simple non-function binding"
+  'x
+  (tree-node-expression
+   (match-letrec-steer tree-node-protocol
+     ([x (leaf 'x)])
+     x)))
+
 (test-end)
 
 (exit (if (zero? (test-runner-fail-count (test-runner-get))) 0 1))
