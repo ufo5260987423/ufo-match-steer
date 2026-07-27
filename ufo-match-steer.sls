@@ -296,11 +296,11 @@
       ((match-steer-two protocols v (p =.. n . r) g+s sk fk i)
        (match-extract-vars
         p
-        (match-steer-gen-ellipsis/range n n protocols v p r g+s sk fk i) i ()))
+        (match-steer-gen-ellipsis/range protocols n n v p r g+s sk fk i) i ()))
       ((match-steer-two protocols v (p *.. n m . r) g+s sk fk i)
        (match-extract-vars
         p
-        (match-steer-gen-ellipsis/range n m protocols v p r g+s sk fk i) i ()))
+        (match-steer-gen-ellipsis/range protocols n m v p r g+s sk fk i) i ()))
       ((match-steer-two protocols v ($ rec p ...) g+s sk fk i)
        (if (is-a? v rec)
            (match-record-refs protocols v rec 0 (p ...) g+s sk fk i)
@@ -536,7 +536,7 @@
               (cond
                ((= n tail-len)
                 (let ((id (reverse id-ls)) ...)
-                  (match-steer-quasiquote ls r g+s (sk ...) fk (i ... id ...))))
+                  (match-steer-quasiquote protocols ls r g+s (sk ...) fk (i ... id ...))))
                ((match-steer-tree? protocols ls)
                 (let ((w (match-steer-car protocols ls)))
                   (match-steer-one protocols w p
@@ -554,7 +554,7 @@
 
 (define-syntax match-steer-gen-ellipsis/range
   (syntax-rules ()
-    ((_ %lo %hi v p r g+s (sk ...) fk (i ...) ((id id-ls) ...))
+    ((_ protocols %lo %hi v p r g+s (sk ...) fk (i ...) ((id id-ls) ...))
      ;; general case, trailing patterns to match, keep track of the
      ;; remaining list length so we don't need any backtracking
      (match-verify-no-ellipsis
@@ -630,7 +630,7 @@
                           (fail)
                           (let ((u (match-steer-car protocols w)))
                             (match-steer-one
-                             u p ((match-steer-car protocols w) (match-steer-set-car! protocols w))
+                             protocols u p ((match-steer-car protocols w) (match-steer-set-car! protocols w))
                              (match-drop-ids
                               ;; accumulate the head variables from
                               ;; the p pattern, and loop over the tail

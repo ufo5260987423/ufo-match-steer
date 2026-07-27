@@ -230,6 +230,200 @@
      [(x) (list x)]
      [else 'no-match])))
 
+;; P1/P2/P3 tests for pattern features, advanced patterns, mutable
+;; protocols, and empty-list matching.
+
+(test-equal "? predicate pattern with subpattern"
+  '((x) x)
+  (let ([node (tn '(lambda (x) x)
+                  (leaf 'lambda)
+                  (tn '(x) (leaf 'x))
+                  (leaf 'x))])
+    (node-exprs
+     (match-steer tree-node-protocol node
+       [(? tree-node? ('lambda params body)) (list params body)]
+       [else 'no-match]))))
+
+(test-equal "= pattern transforms value before matching"
+  '((x) x)
+  (match-steer tree-node-protocol
+    (tn '(lambda (x) x)
+        (leaf 'lambda)
+        (tn '(x) (leaf 'x))
+        (leaf 'x))
+    [(= tree-node-expression ('lambda params body)) (list params body)]
+    [else 'no-match]))
+
+(test-equal "and pattern"
+  'x
+  (tree-node-expression
+   (match-steer tree-node-protocol
+     (leaf 'x)
+     [(and n (? tree-node?)) n]
+     [else 'no-match])))
+
+(test-equal "or pattern"
+  'ok
+  (match-steer tree-node-protocol
+    (leaf 'a)
+    [(or 'a 'b) 'ok]
+    [else 'no-match]))
+
+(test-equal "not pattern"
+  'not-symbol
+  (match-steer tree-node-protocol
+    (leaf 42)
+    [(= tree-node-expression (not (? symbol?))) 'not-symbol]
+    [else 'no-match]))
+
+(test-equal "vector pattern"
+  '(2 3)
+  (match-steer tree-node-protocol
+    '#(1 2 3)
+    [#(a b c) (list b c)]
+    [else 'no-match]))
+
+(test-equal "vector ellipsis pattern"
+  '(2 3)
+  (match-steer tree-node-protocol
+    '#(1 2 3)
+    [#(a b ...) b]
+    [else 'no-match]))
+
+(test-equal "*** tree search"
+  'found
+  (match-steer tree-node-protocol
+    (tn '(a (b (c target)))
+        (leaf 'a)
+        (tn '(b (c target))
+            (leaf 'b)
+            (tn '(c target)
+                (leaf 'c)
+                (leaf 'target))))
+    [(x *** 'target) 'found]
+    [else 'not-found]))
+
+(test-equal "**1 non-empty repetition matches whole value"
+  '(a x y)
+  (tree-node-expression
+   (match-steer tree-node-protocol
+     (tn '(a x y) (leaf 'a) (leaf 'x) (leaf 'y))
+     [(a **1) a]
+     [else 'no-match])))
+
+(test-equal "**1 does not match empty ordinary list"
+  'empty
+  (match-steer tree-node-protocol
+    '()
+    [(a **1) 'non-empty]
+    [else 'empty]))
+
+(test-equal "=.. exact repetition"
+  '(a a a)
+  (node-exprs
+   (match-steer tree-node-protocol
+     (list (leaf 'a) (leaf 'a) (leaf 'a))
+     [(a =.. 3) a]
+     [else 'no-match])))
+
+(test-equal "*.. range repetition"
+  '(a a)
+  (node-exprs
+   (match-steer tree-node-protocol
+     (list (leaf 'a) (leaf 'a))
+     [(a *.. 1 3) a]
+     [else 'no-match])))
+
+(test-equal "quasiquote unquote-splicing"
+  '((x y))
+  (node-exprs
+   (match-steer tree-node-protocol
+     (tn '(lambda (x y) body)
+         (leaf 'lambda)
+         (tn '(x y) (leaf 'x) (leaf 'y))
+         (leaf 'body))
+     [`(lambda ,@ps body) ps]
+     [else 'no-match])))
+
+(test-equal "nested quasiquote"
+  'x
+  (tree-node-expression
+   (match-steer tree-node-protocol
+     (tn '(quote x) (leaf 'quote) (leaf 'x))
+     [`(quote ,x) x]
+     [else 'no-match])))
+
+;; Mutable record and protocol for set!/get! testing.
+(define-record-type mutable-node
+  (fields
+    (mutable expression)
+    (mutable children)))
+
+(define (mutable-node-first-child node)
+  (car (mutable-node-children node)))
+
+(define (mutable-node-rest-children node)
+  (cdr (mutable-node-children node)))
+
+(define (set-mutable-node-first-child! node new)
+  (set-mutable-node-children! node (cons new (cdr (mutable-node-children node)))))
+
+(define (set-mutable-node-rest-children! node new)
+  (set-mutable-node-children! node (cons (car (mutable-node-children node)) new)))
+
+(define mutable-node-protocol
+  (make-match-protocol
+    mutable-node?
+    mutable-node-expression
+    mutable-node-children
+    mutable-node-first-child
+    mutable-node-rest-children
+    set-mutable-node-first-child!
+    set-mutable-node-rest-children!))
+
+(define (mn expr . children)
+  (make-mutable-node expr children))
+
+(define (mleaf expr)
+  (make-mutable-node expr '()))
+
+(test-equal "mutable protocol get! pattern"
+  '(x)
+  (let ([m (mn '(lambda (x) x)
+               (mleaf 'lambda)
+               (mn '(x) (mleaf 'x))
+               (mleaf 'x))])
+    (mutable-node-expression
+     (match-steer mutable-node-protocol m
+       [('lambda (get! g) body) (g)]
+       [else 'no-match]))))
+
+(test-equal "mutable protocol set! pattern"
+  '(lambda (y z) x)
+  (let ([m (mn '(lambda (x) x)
+               (mleaf 'lambda)
+               (mn '(x) (mleaf 'x))
+               (mleaf 'x))])
+    (match-steer mutable-node-protocol m
+      [('lambda (set! s) body)
+       (s (mn '(y z) (mleaf 'y) (mleaf 'z)))
+       (map mutable-node-expression (mutable-node-children m))]
+      [else 'no-match])))
+
+(test-equal "empty list pattern on ordinary null"
+  'empty
+  (match-steer tree-node-protocol
+    '()
+    [() 'empty]
+    [else 'non-empty]))
+
+(test-equal "empty list pattern on null tree-node"
+  'empty
+  (match-steer tree-node-protocol
+    (leaf 'x)
+    [() 'empty]
+    [else 'non-empty]))
+
 (test-end)
 
 (exit (if (zero? (test-runner-fail-count (test-runner-get))) 0 1))
