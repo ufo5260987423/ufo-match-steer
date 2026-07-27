@@ -201,39 +201,8 @@
        (lambda (n) (if (= n 0) #f (even? (- n 1)))))])
     (even? 10)))
 
-;; A second record type to test multi-protocol matching.
-(define-record-type box-node
-  (fields
-    (immutable expression)
-    (immutable child)))
-
-(define (box-node-first-child node)
-  (box-node-child node))
-
-(define (box-node-rest-children node)
-  '())
-
-(define box-node-protocol
-  (make-match-protocol
-    box-node?
-    box-node-expression
-    (lambda (node) (list (box-node-child node)))
-    box-node-first-child
-    box-node-rest-children
-    #f
-    #f))
-
-(test-equal "match-steer with multiple protocols"
-  '(inner)
-  (node-exprs
-   (match-steer (list tree-node-protocol box-node-protocol)
-     (make-box-node 'tree-box (leaf 'inner))
-     [('lambda params body) params]
-     [(x) (list x)]
-     [else 'no-match])))
-
 ;; P1/P2/P3 tests for pattern features, advanced patterns, mutable
-;; protocols, and empty-list matching.
+;; protocol, and empty-list matching.
 
 (test-equal "? predicate pattern with subpattern"
   '((x) x)
@@ -547,37 +516,6 @@
    (match-protocol-first-child-setter tree-node-protocol)
    (match-protocol-rest-children-setter tree-node-protocol)))
 
-(define override-protocol
-  (make-match-protocol
-    tree-node?
-    (lambda (node) 'overridden)
-    tree-node-children
-    tree-node-first-child
-    tree-node-rest-children
-    #f
-    #f))
-
-(test-equal "multiple protocols use first matching protocol"
-  'first-wins
-  (match-steer (list override-protocol tree-node-protocol)
-    (leaf 'x)
-    ['overridden 'first-wins]
-    [else 'fallback]))
-
-(test-equal "multiple protocols fall back to later protocol"
-  'later-wins
-  (match-steer (list tree-node-protocol override-protocol)
-    (leaf 'x)
-    [x 'later-wins]
-    [else 'fallback]))
-
-(test-equal "empty protocol list falls back to ordinary pairs"
-  '(1 2 3)
-  (match-steer '()
-    '(1 2 3)
-    [(a b c) (list a b c)]
-    [else 'no-match]))
-
 (test-equal "? predicate without subpattern"
   'node
   (match-steer tree-node-protocol
@@ -587,14 +525,14 @@
 
 (test-equal "or variable unification"
   'x
-  (match-steer '()
+  (match-steer tree-node-protocol
     'x
     [(or (and n (? symbol?)) n) n]
     [else 'no-match]))
 
 (test-equal "and with not"
   42
-  (match-steer '()
+  (match-steer tree-node-protocol
     42
     [(and n (not (? symbol?))) n]
     [else 'no-match]))

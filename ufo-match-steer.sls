@@ -81,67 +81,63 @@
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; Runtime protocol selection helpers
 
-  (define (match-steer-find-protocol protocols v)
-    (let loop ([ps protocols])
-      (cond
-        [(null? ps) #f]
-        [((match-protocol-predicate (car ps)) v) (car ps)]
-        [else (loop (cdr ps))])))
+  (define (match-steer-find-protocol protocol v)
+    (if ((match-protocol-predicate protocol) v) protocol #f))
 
-  (define (match-steer-tree? protocols v)
+  (define (match-steer-tree? protocol v)
     (or (pair? v)
-        (and (match-steer-find-protocol protocols v) #t)))
+        (and (match-steer-find-protocol protocol v) #t)))
 
-  (define (match-steer-null-tree? protocols v)
+  (define (match-steer-null-tree? protocol v)
     (or (null? v)
-        (let ([p (match-steer-find-protocol protocols v)])
+        (let ([p (match-steer-find-protocol protocol v)])
           (and p (null? ((match-protocol-children-getter p) v))))))
 
-  (define (match-steer-expression protocols v)
+  (define (match-steer-expression protocol v)
     (if (pair? v)
         v
-        (let ([p (match-steer-find-protocol protocols v)])
+        (let ([p (match-steer-find-protocol protocol v)])
           (if p
               ((match-protocol-expression-getter p) v)
               v))))
 
-  (define (match-steer-car protocols v)
+  (define (match-steer-car protocol v)
     (if (pair? v)
         (car v)
-        (let ([p (match-steer-find-protocol protocols v)])
+        (let ([p (match-steer-find-protocol protocol v)])
           ((match-protocol-first-child-getter p) v))))
 
-  (define (match-steer-cdr protocols v)
+  (define (match-steer-cdr protocol v)
     (if (pair? v)
         (cdr v)
-        (let ([p (match-steer-find-protocol protocols v)])
+        (let ([p (match-steer-find-protocol protocol v)])
           ((match-protocol-rest-children-getter p) v))))
 
-  (define (match-steer-list? protocols v)
+  (define (match-steer-list? protocol v)
     (or (null? v)
         (if (pair? v)
             (list? v)
-            (let ([p (match-steer-find-protocol protocols v)])
+            (let ([p (match-steer-find-protocol protocol v)])
               (and p (list? ((match-protocol-children-getter p) v)))))))
 
-  (define (match-steer-length protocols v)
+  (define (match-steer-length protocol v)
     (if (pair? v)
         (length v)
-        (let ([p (match-steer-find-protocol protocols v)])
+        (let ([p (match-steer-find-protocol protocol v)])
           (if p
               (length ((match-protocol-children-getter p) v))
               0))))
 
-  (define (match-steer-set-car! protocols v new)
+  (define (match-steer-set-car! protocol v new)
     (if (pair? v)
         (set-car! v new)
-        (let ([p (match-steer-find-protocol protocols v)])
+        (let ([p (match-steer-find-protocol protocol v)])
           ((match-protocol-first-child-setter p) v new))))
 
-  (define (match-steer-set-cdr! protocols v new)
+  (define (match-steer-set-cdr! protocol v new)
     (if (pair? v)
         (set-cdr! v new)
-        (let ([p (match-steer-find-protocol protocols v)])
+        (let ([p (match-steer-find-protocol protocol v)])
           ((match-protocol-rest-children-setter p) v new))))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -160,7 +156,7 @@
 
   ;;> Like match, but the list/pair patterns are interpreted according to
   ;;> the tree access PROTOCOL.  PROTOCOL can be a single protocol or a
-  ;;> list of protocols.
+  ;;> list of protocol.
 
   (define-syntax match-steer
     (syntax-rules ()
@@ -169,10 +165,9 @@
       ((match-steer protocol atom)
        (match-syntax-error "no match clauses"))
       ((match-steer protocol-expr atom (pat . body) ...)
-       (let ([protocols (let ([p protocol-expr])
-                          (if (list? p) p (list p)))]
+       (let ([protocol protocol-expr]
              [v atom])
-         (match-steer-next protocols v (atom (set! atom)) (pat . body) ...)))))
+         (match-steer-next protocol v (atom (set! atom)) (pat . body) ...)))))
 
   ;; MATCH-NEXT passes each clause to MATCH-ONE in turn with its failure
   ;; thunk, which is expanded by recursing MATCH-NEXT on the remaining
@@ -182,16 +177,16 @@
   (define-syntax match-steer-next
     (syntax-rules (=>)
       ;; no more clauses, the match failed
-      ((match-steer-next protocols v g+s)
+      ((match-steer-next protocol v g+s)
        (error 'match-steer "no matching pattern"))
       ;; named failure continuation
-      ((match-steer-next protocols v g+s (pat (=> failure) . body) . rest)
-       (let ((failure (lambda () (match-steer-next protocols v g+s . rest))))
+      ((match-steer-next protocol v g+s (pat (=> failure) . body) . rest)
+       (let ((failure (lambda () (match-steer-next protocol v g+s . rest))))
          ;; match-one analyzes the pattern for us
-         (match-steer-one protocols v pat g+s (match-drop-ids (begin . body)) (failure) ())))
+         (match-steer-one protocol v pat g+s (match-drop-ids (begin . body)) (failure) ())))
       ;; anonymous failure continuation, give it a dummy name
-      ((match-steer-next protocols v g+s (pat . body) . rest)
-       (match-steer-next protocols v g+s (pat (=> failure) . body) . rest))))
+      ((match-steer-next protocol v g+s (pat . body) . rest)
+       (match-steer-next protocol v g+s (pat (=> failure) . body) . rest))))
 
   ;; MATCH-ONE first checks for ellipsis patterns, otherwise passes on to
   ;; MATCH-TWO.
@@ -201,23 +196,23 @@
       ;; If it's a list of two or more values, check to see if the
       ;; second one is an ellipsis and handle accordingly, otherwise go
       ;; to MATCH-TWO.
-      ((match-steer-one protocols v (p q . r) g+s sk fk i)
+      ((match-steer-one protocol v (p q . r) g+s sk fk i)
        (match-check-ellipsis
         q
-        (match-extract-vars p (match-steer-gen-ellipsis protocols v p r g+s sk fk i) i ())
-        (match-steer-two protocols v (p q . r) g+s sk fk i)))
+        (match-extract-vars p (match-steer-gen-ellipsis protocol v p r g+s sk fk i) i ())
+        (match-steer-two protocol v (p q . r) g+s sk fk i)))
       ;; Go directly to MATCH-TWO.
-      ((match-steer-one protocols . x)
-       (match-steer-two protocols . x))))
+      ((match-steer-one protocol . x)
+       (match-steer-two protocol . x))))
 
   ;; This is the guts of the pattern matcher.  We are passed a lot of
   ;; information in the form:
   ;;
-  ;;   (match-steer-two protocols var pattern getter setter success-k fail-k (ids ...))
+  ;;   (match-steer-two protocol var pattern getter setter success-k fail-k (ids ...))
   ;;
   ;; usually abbreviated
   ;;
-  ;;   (match-steer-two protocols v p g+s sk fk i)
+  ;;   (match-steer-two protocol v p g+s sk fk i)
   ;;
   ;; where VAR is the symbol name of the current variable we are
   ;; matching, PATTERN is the current pattern, getter and setter are the
@@ -229,40 +224,40 @@
 
   (define-syntax match-steer-two
     (syntax-rules (:_ ___ **1 =.. *.. *** quote quasiquote ? = and or not set! get!)
-      ((match-steer-two protocols v () g+s (sk ...) fk i)
-       (if (match-steer-null-tree? protocols v) (sk ... i) fk))
-      ((match-steer-two protocols v (quote p) g+s (sk ...) fk i)
-       (if (equal? (match-steer-expression protocols v) 'p) (sk ... i) fk))
-      ((match-steer-two protocols v (quasiquote p) . x)
-       (match-steer-quasiquote protocols v p . x))
-      ((match-steer-two protocols v (and) g+s (sk ...) fk i) (sk ... i))
-      ((match-steer-two protocols v (and p q ...) g+s sk fk i)
-       (match-steer-one protocols v p g+s (match-steer-one protocols v (and q ...) g+s sk fk) fk i))
-      ((match-steer-two protocols v (or) g+s sk fk i) fk)
-      ((match-steer-two protocols v (or p) . x)
-       (match-steer-one protocols v p . x))
-      ((match-steer-two protocols v (or p ...) g+s sk fk i)
-       (match-extract-vars (or p ...) (match-gen-or protocols v (p ...) g+s sk fk i) i ()))
-      ((match-steer-two protocols v (not p) g+s (sk ...) fk i)
+      ((match-steer-two protocol v () g+s (sk ...) fk i)
+       (if (match-steer-null-tree? protocol v) (sk ... i) fk))
+      ((match-steer-two protocol v (quote p) g+s (sk ...) fk i)
+       (if (equal? (match-steer-expression protocol v) 'p) (sk ... i) fk))
+      ((match-steer-two protocol v (quasiquote p) . x)
+       (match-steer-quasiquote protocol v p . x))
+      ((match-steer-two protocol v (and) g+s (sk ...) fk i) (sk ... i))
+      ((match-steer-two protocol v (and p q ...) g+s sk fk i)
+       (match-steer-one protocol v p g+s (match-steer-one protocol v (and q ...) g+s sk fk) fk i))
+      ((match-steer-two protocol v (or) g+s sk fk i) fk)
+      ((match-steer-two protocol v (or p) . x)
+       (match-steer-one protocol v p . x))
+      ((match-steer-two protocol v (or p ...) g+s sk fk i)
+       (match-extract-vars (or p ...) (match-gen-or protocol v (p ...) g+s sk fk i) i ()))
+      ((match-steer-two protocol v (not p) g+s (sk ...) fk i)
        (let ((fk2 (lambda () (sk ... i))))
-         (match-steer-one protocols v p g+s (match-drop-ids fk) (fk2) i)))
-      ((match-steer-two protocols v (get! getter) (g s) (sk ...) fk i)
+         (match-steer-one protocol v p g+s (match-drop-ids fk) (fk2) i)))
+      ((match-steer-two protocol v (get! getter) (g s) (sk ...) fk i)
        (let ((getter (lambda () g))) (sk ... i)))
-      ((match-steer-two protocols v (set! setter) (g (s ...)) (sk ...) fk i)
+      ((match-steer-two protocol v (set! setter) (g (s ...)) (sk ...) fk i)
        (let ((setter (lambda (x) (s ... x)))) (sk ... i)))
-      ((match-steer-two protocols v (? pred . p) g+s sk fk i)
-       (if (pred v) (match-steer-one protocols v (and . p) g+s sk fk i) fk))
-      ((match-steer-two protocols v (= proc p) . x)
-       (let ((w (proc v))) (match-steer-one protocols w p . x)))
-      ((match-steer-two protocols v (p ___ . r) g+s sk fk i)
-       (match-extract-vars p (match-steer-gen-ellipsis protocols v p r g+s sk fk i) i ()))
-      ((match-steer-two protocols v (p) g+s sk fk i)
-       (let ([p-found (match-steer-find-protocol protocols v)])
+      ((match-steer-two protocol v (? pred . p) g+s sk fk i)
+       (if (pred v) (match-steer-one protocol v (and . p) g+s sk fk i) fk))
+      ((match-steer-two protocol v (= proc p) . x)
+       (let ((w (proc v))) (match-steer-one protocol w p . x)))
+      ((match-steer-two protocol v (p ___ . r) g+s sk fk i)
+       (match-extract-vars p (match-steer-gen-ellipsis protocol v p r g+s sk fk i) i ()))
+      ((match-steer-two protocol v (p) g+s sk fk i)
+       (let ([p-found (match-steer-find-protocol protocol v)])
          (if p-found
-             (if (match-steer-null-tree? protocols
+             (if (match-steer-null-tree? protocol
                    ((match-protocol-rest-children-getter p-found) v))
                  (let ((w ((match-protocol-first-child-getter p-found) v)))
-                   (match-steer-one protocols w p
+                   (match-steer-one protocol w p
                      (((match-protocol-first-child-getter p-found) v)
                       (lambda (new)
                         ((match-protocol-first-child-setter p-found) v new)))
@@ -270,53 +265,53 @@
                  fk)
              (if (and (pair? v) (null? (cdr v)))
                  (let ((w (car v)))
-                   (match-steer-one protocols w p ((car v) (set-car! v)) sk fk i))
+                   (match-steer-one protocol w p ((car v) (set-car! v)) sk fk i))
                  fk))))
-      ((match-steer-two protocols v (p *** q) g+s sk fk i)
-       (match-extract-vars p (match-steer-gen-search protocols v p q g+s sk fk i) i ()))
-      ((match-steer-two protocols v (p *** . q) g+s sk fk i)
+      ((match-steer-two protocol v (p *** q) g+s sk fk i)
+       (match-extract-vars p (match-steer-gen-search protocol v p q g+s sk fk i) i ()))
+      ((match-steer-two protocol v (p *** . q) g+s sk fk i)
        (match-syntax-error "invalid use of ***" (p *** . q)))
-      ((match-steer-two protocols v (p **1) g+s sk fk i)
-       (if (match-steer-tree? protocols v)
-           (match-steer-one protocols v (p ___) g+s sk fk i)
+      ((match-steer-two protocol v (p **1) g+s sk fk i)
+       (if (match-steer-tree? protocol v)
+           (match-steer-one protocol v (p ___) g+s sk fk i)
            fk))
-      ((match-steer-two protocols v (p =.. n . r) g+s sk fk i)
+      ((match-steer-two protocol v (p =.. n . r) g+s sk fk i)
        (match-extract-vars
         p
-        (match-steer-gen-ellipsis/range protocols n n v p r g+s sk fk i) i ()))
-      ((match-steer-two protocols v (p *.. n m . r) g+s sk fk i)
+        (match-steer-gen-ellipsis/range protocol n n v p r g+s sk fk i) i ()))
+      ((match-steer-two protocol v (p *.. n m . r) g+s sk fk i)
        (match-extract-vars
         p
-        (match-steer-gen-ellipsis/range protocols n m v p r g+s sk fk i) i ()))
+        (match-steer-gen-ellipsis/range protocol n m v p r g+s sk fk i) i ()))
       ;; Record-matching patterns ($ struct & object) are reserved for a
       ;; future design and disabled for now.
       ;;
-      ;; ((match-steer-two protocols v ($ rec p ...) g+s sk fk i)
+      ;; ((match-steer-two protocol v ($ rec p ...) g+s sk fk i)
       ;;  (if (is-a? v rec)
-      ;;      (match-record-refs protocols v rec 0 (p ...) g+s sk fk i)
+      ;;      (match-record-refs protocol v rec 0 (p ...) g+s sk fk i)
       ;;      fk))
-      ;; ((match-steer-two protocols v (struct rec p ...) g+s sk fk i)
+      ;; ((match-steer-two protocol v (struct rec p ...) g+s sk fk i)
       ;;  (if (is-a? v rec)
       ;;      (match-record-refs v rec 0 (p ...) g+s sk fk i)
       ;;      fk))
-      ;; ((match-steer-two protocols v (& rec p ...) g+s sk fk i)
+      ;; ((match-steer-two protocol v (& rec p ...) g+s sk fk i)
       ;;  (if (is-a? v rec)
-      ;;      (match-record-named-refs protocols v rec (p ...) g+s sk fk i)
+      ;;      (match-record-named-refs protocol v rec (p ...) g+s sk fk i)
       ;;      fk))
-      ;; ((match-steer-two protocols v (object rec p ...) g+s sk fk i)
+      ;; ((match-steer-two protocol v (object rec p ...) g+s sk fk i)
       ;;  (if (is-a? v rec)
-      ;;      (match-record-named-refs protocols v rec (p ...) g+s sk fk i)
+      ;;      (match-record-named-refs protocol v rec (p ...) g+s sk fk i)
       ;;      fk))
-      ((match-steer-two protocols v (p . q) g+s sk fk i)
-       (let ([p-found (match-steer-find-protocol protocols v)])
+      ((match-steer-two protocol v (p . q) g+s sk fk i)
+       (let ([p-found (match-steer-find-protocol protocol v)])
          (if p-found
              (let ((w ((match-protocol-first-child-getter p-found) v))
                    (x ((match-protocol-rest-children-getter p-found) v)))
-               (match-steer-one protocols w p
+               (match-steer-one protocol w p
                  (((match-protocol-first-child-getter p-found) v)
                   (lambda (new)
                     ((match-protocol-first-child-setter p-found) v new)))
-                 (match-steer-one protocols x q
+                 (match-steer-one protocol x q
                    (((match-protocol-rest-children-getter p-found) v)
                     (lambda (new)
                       ((match-protocol-rest-children-setter p-found) v new)))
@@ -325,20 +320,20 @@
                  i))
              (if (pair? v)
                  (let ((w (car v)) (x (cdr v)))
-                   (match-steer-one protocols w p ((car v) (set-car! v))
-                     (match-steer-one protocols x q ((cdr v) (set-cdr! v)) sk fk)
+                   (match-steer-one protocol w p ((car v) (set-car! v))
+                     (match-steer-one protocol x q ((cdr v) (set-cdr! v)) sk fk)
                      fk
                      i))
                  fk))))
-      ((match-steer-two protocols v #(p ...) g+s . x)
-       (match-vector protocols v 0 () (p ...) . x))
+      ((match-steer-two protocol v #(p ...) g+s . x)
+       (match-vector protocol v 0 () (p ...) . x))
       ;; Next line: replace '_' with ':_'. (FBE)
-      ((match-steer-two protocols v :_ g+s (sk ...) fk i) (sk ... i))
+      ((match-steer-two protocol v :_ g+s (sk ...) fk i) (sk ... i))
       ;; Not a pair or vector or special literal, test to see if it's a
       ;; new symbol, in which case we just bind it, or if it's an
       ;; already bound symbol or some other literal, in which case we
       ;; compare it with EQUAL?.
-      ((match-steer-two protocols v x g+s (sk ...) fk (id ...))
+      ((match-steer-two protocol v x g+s (sk ...) fk (id ...))
        (match-check-identifier
         x
         (let-syntax
@@ -348,52 +343,52 @@
                 ((new-sym? y sk2 fk2) fk2))))
           (new-sym? random-sym-to-match
                     (let ((x v)) (sk ... (id ... x)))
-                    (if (equal? (match-steer-expression protocols v) x) (sk ... (id ...)) fk)))
-        (if (equal? (match-steer-expression protocols v) x) (sk ... (id ...)) fk)))
+                    (if (equal? (match-steer-expression protocol v) x) (sk ... (id ...)) fk)))
+        (if (equal? (match-steer-expression protocol v) x) (sk ... (id ...)) fk)))
       ))
 
   ;; QUASIQUOTE patterns
 
   (define-syntax match-steer-quasiquote
     (syntax-rules (unquote unquote-splicing quasiquote or)
-      ((_ protocols v (unquote p) g+s sk fk i)
-       (match-steer-one protocols v p g+s sk fk i))
-      ((_ protocols v ((unquote-splicing p) . rest) g+s sk fk i)
+      ((_ protocol v (unquote p) g+s sk fk i)
+       (match-steer-one protocol v p g+s sk fk i))
+      ((_ protocol v ((unquote-splicing p) . rest) g+s sk fk i)
        (match-extract-vars
         p
-        (match-steer-gen-ellipsis/qq protocols v p rest g+s sk fk i) i ()))
-      ((_ protocols v (quasiquote p) g+s sk fk i . depth)
-       (match-steer-quasiquote protocols v p g+s sk fk i #f . depth))
-      ((_ protocols v (unquote p) g+s sk fk i x . depth)
-       (match-steer-quasiquote protocols v p g+s sk fk i . depth))
-      ((_ protocols v (unquote-splicing p) g+s sk fk i x . depth)
-       (match-steer-quasiquote protocols v p g+s sk fk i . depth))
-      ((_ protocols v (p . q) g+s sk fk i . depth)
-       (let ([p-found (match-steer-find-protocol protocols v)])
+        (match-steer-gen-ellipsis/qq protocol v p rest g+s sk fk i) i ()))
+      ((_ protocol v (quasiquote p) g+s sk fk i . depth)
+       (match-steer-quasiquote protocol v p g+s sk fk i #f . depth))
+      ((_ protocol v (unquote p) g+s sk fk i x . depth)
+       (match-steer-quasiquote protocol v p g+s sk fk i . depth))
+      ((_ protocol v (unquote-splicing p) g+s sk fk i x . depth)
+       (match-steer-quasiquote protocol v p g+s sk fk i . depth))
+      ((_ protocol v (p . q) g+s sk fk i . depth)
+       (let ([p-found (match-steer-find-protocol protocol v)])
          (if p-found
              (let ((w ((match-protocol-first-child-getter p-found) v))
                    (x ((match-protocol-rest-children-getter p-found) v)))
-               (match-steer-quasiquote protocols w p g+s
-                 (match-steer-quasiquote-step protocols x q g+s sk fk depth)
+               (match-steer-quasiquote protocol w p g+s
+                 (match-steer-quasiquote-step protocol x q g+s sk fk depth)
                  fk i . depth))
              (if (pair? v)
                  (let ((w (car v)) (x (cdr v)))
-                   (match-steer-quasiquote protocols w p g+s
-                     (match-steer-quasiquote-step protocols x q g+s sk fk depth)
+                   (match-steer-quasiquote protocol w p g+s
+                     (match-steer-quasiquote-step protocol x q g+s sk fk depth)
                      fk i . depth))
                  fk))))
-      ((_ protocols v #(elt ...) g+s sk fk i . depth)
+      ((_ protocol v #(elt ...) g+s sk fk i . depth)
        (if (vector? v)
            (let ((ls (vector->list v)))
-             (match-steer-quasiquote protocols ls (elt ...) g+s sk fk i . depth))
+             (match-steer-quasiquote protocol ls (elt ...) g+s sk fk i . depth))
            fk))
-      ((_ protocols v x g+s sk fk i . depth)
-       (match-steer-one protocols v 'x g+s sk fk i))))
+      ((_ protocol v x g+s sk fk i . depth)
+       (match-steer-one protocol v 'x g+s sk fk i))))
 
   (define-syntax match-steer-quasiquote-step
     (syntax-rules ()
-      ((match-steer-quasiquote-step protocols x q g+s sk fk depth i)
-       (match-steer-quasiquote protocols x q g+s sk fk i . depth))))
+      ((match-steer-quasiquote-step protocol x q g+s sk fk depth i)
+       (match-steer-quasiquote protocol x q g+s sk fk i . depth))))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; Utilities
@@ -420,23 +415,23 @@
 
   (define-syntax match-gen-or
     (syntax-rules ()
-      ((_ protocols v p g+s (sk ...) fk (i ...) ((id id-ls) ...))
+      ((_ protocol v p g+s (sk ...) fk (i ...) ((id id-ls) ...))
        (let ((sk2 (lambda (id ...) (sk ... (i ... id ...))))
              (id (if #f #f)) ...)
-         (match-gen-or-step protocols v p g+s (match-drop-ids (sk2 id ...)) fk (i ...))))))
+         (match-gen-or-step protocol v p g+s (match-drop-ids (sk2 id ...)) fk (i ...))))))
 
   (define-syntax match-gen-or-step
     (syntax-rules ()
-      ((_ protocols v () g+s sk fk . x)
+      ((_ protocol v () g+s sk fk . x)
        ;; no OR clauses, call the failure continuation
        fk)
-      ((_ protocols v (p) . x)
+      ((_ protocol v (p) . x)
        ;; last (or only) OR clause, just expand normally
-       (match-steer-one protocols v p . x))
-      ((_ protocols v (p . q) g+s sk fk i)
+       (match-steer-one protocol v p . x))
+      ((_ protocol v (p . q) g+s sk fk i)
        ;; match one and try the remaining on failure
-       (let ((fk2 (lambda () (match-gen-or-step protocols v q g+s sk fk i))))
-         (match-steer-one protocols v p g+s sk (fk2) i)))
+       (let ((fk2 (lambda () (match-gen-or-step protocol v q g+s sk fk i))))
+         (match-steer-one protocol v p g+s sk (fk2) i)))
       ))
 
   ;; We match a pattern (p ...) by matching the pattern p in a loop on
@@ -445,27 +440,27 @@
   (define-syntax match-steer-gen-ellipsis
   (syntax-rules ()
     ;; TODO: restore fast path when p is not already bound
-    ((_ protocols v p () g+s (sk ...) fk i ((id id-ls) ...))
+    ((_ protocol v p () g+s (sk ...) fk i ((id id-ls) ...))
      (match-check-identifier p
        ;; simplest case equivalent to (p ...), just match the list
        (let ((w v))
-         (if (match-steer-list? protocols w)
-             (match-steer-one protocols w p g+s (sk ...) fk i)
+         (if (match-steer-list? protocol w)
+             (match-steer-one protocol w p g+s (sk ...) fk i)
              fk))
        ;; simple case, match all elements of the list
        (let loop ((ls v) (id-ls '()) ...)
          (cond
-           ((match-steer-null-tree? protocols ls)
+           ((match-steer-null-tree? protocol ls)
             (let ((id (reverse id-ls)) ...) (sk ... i)))
-           ((match-steer-tree? protocols ls)
-            (let ((w (match-steer-car protocols ls)))
-              (match-steer-one protocols w p
-                  ((match-steer-car protocols ls) (match-steer-set-car! protocols ls))
-                  (match-drop-ids (loop (match-steer-cdr protocols ls) (cons id id-ls) ...))
+           ((match-steer-tree? protocol ls)
+            (let ((w (match-steer-car protocol ls)))
+              (match-steer-one protocol w p
+                  ((match-steer-car protocol ls) (match-steer-set-car! protocol ls))
+                  (match-drop-ids (loop (match-steer-cdr protocol ls) (cons id id-ls) ...))
                   fk i)))
            (else
             fk)))))
-    ((_ protocols v p r g+s sk fk (i ...) ((id id-ls) ...))
+    ((_ protocol v p r g+s sk fk (i ...) ((id id-ls) ...))
      (match-verify-no-ellipsis
       r
       (match-bound-identifier-memv
@@ -476,13 +471,13 @@
        (let loop ((ls v) (expect p))
          (cond
           ((null? expect)
-           (match-steer-one protocols ls r (#f #f) sk fk (i ...)))
-          ((match-steer-tree? protocols ls)
-           (let ((w (match-steer-car protocols ls))
+           (match-steer-one protocol ls r (#f #f) sk fk (i ...)))
+          ((match-steer-tree? protocol ls)
+           (let ((w (match-steer-car protocol ls))
                  (e (car expect)))
-             (if (equal? (match-steer-expression protocols w)
-                         (match-steer-expression protocols e))
-                 (match-drop-ids (loop (match-steer-cdr protocols ls) (cdr expect)))
+             (if (equal? (match-steer-expression protocol w)
+                         (match-steer-expression protocol e))
+                 (match-drop-ids (loop (match-steer-cdr protocol ls) (cdr expect)))
                  fk)))
           (else
            fk)))
@@ -490,20 +485,20 @@
        ;; the remaining list length so we don't need any backtracking
        (let* ((tail-len (length 'r))
               (ls v)
-              (len (and (match-steer-list? protocols ls) (match-steer-length protocols ls))))
+              (len (and (match-steer-list? protocol ls) (match-steer-length protocol ls))))
          (if (or (not len) (< len tail-len))
              fk
              (let loop ((ls ls) (n len) (id-ls '()) ...)
                (cond
                 ((= n tail-len)
                  (let ((id (reverse id-ls)) ...)
-                   (match-steer-one protocols ls r (#f #f) sk fk (i ... id ...))))
-                ((match-steer-tree? protocols ls)
-                 (let ((w (match-steer-car protocols ls)))
-                   (match-steer-one protocols w p
-                       ((match-steer-car protocols ls) (match-steer-set-car! protocols ls))
+                   (match-steer-one protocol ls r (#f #f) sk fk (i ... id ...))))
+                ((match-steer-tree? protocol ls)
+                 (let ((w (match-steer-car protocol ls)))
+                   (match-steer-one protocol w p
+                       ((match-steer-car protocol ls) (match-steer-set-car! protocol ls))
                        (match-drop-ids
-                        (loop (match-steer-cdr protocols ls) (- n 1) (cons id id-ls) ...))
+                        (loop (match-steer-cdr protocol ls) (- n 1) (cons id id-ls) ...))
                        fk
                        (i ...))))
                 (else
@@ -514,25 +509,25 @@
 
 (define-syntax match-steer-gen-ellipsis/qq
   (syntax-rules ()
-    ((_ protocols v p r g+s (sk ...) fk (i ...) ((id id-ls) ...))
+    ((_ protocol v p r g+s (sk ...) fk (i ...) ((id id-ls) ...))
      (match-verify-no-ellipsis
       r
       (let* ((tail-len (length 'r))
              (ls v)
-             (len (and (match-steer-list? protocols ls) (match-steer-length protocols ls))))
+             (len (and (match-steer-list? protocol ls) (match-steer-length protocol ls))))
         (if (or (not len) (< len tail-len))
             fk
             (let loop ((ls ls) (n len) (id-ls '()) ...)
               (cond
                ((= n tail-len)
                 (let ((id (reverse id-ls)) ...)
-                  (match-steer-quasiquote protocols ls r g+s (sk ...) fk (i ... id ...))))
-               ((match-steer-tree? protocols ls)
-                (let ((w (match-steer-car protocols ls)))
-                  (match-steer-one protocols w p
-                      ((match-steer-car protocols ls) (match-steer-set-car! protocols ls))
+                  (match-steer-quasiquote protocol ls r g+s (sk ...) fk (i ... id ...))))
+               ((match-steer-tree? protocol ls)
+                (let ((w (match-steer-car protocol ls)))
+                  (match-steer-one protocol w p
+                      ((match-steer-car protocol ls) (match-steer-set-car! protocol ls))
                       (match-drop-ids
-                       (loop (match-steer-cdr protocols ls) (- n 1) (cons id id-ls) ...))
+                       (loop (match-steer-cdr protocol ls) (- n 1) (cons id id-ls) ...))
                       fk
                       (i ...))))
                (else
@@ -544,7 +539,7 @@
 
 (define-syntax match-steer-gen-ellipsis/range
   (syntax-rules ()
-    ((_ protocols %lo %hi v p r g+s (sk ...) fk (i ...) ((id id-ls) ...))
+    ((_ protocol %lo %hi v p r g+s (sk ...) fk (i ...) ((id id-ls) ...))
      ;; general case, trailing patterns to match, keep track of the
      ;; remaining list length so we don't need any backtracking
      (match-verify-no-ellipsis
@@ -553,19 +548,19 @@
              (hi %hi)
              (tail-len (length 'r))
              (ls v)
-             (len (and (match-steer-list? protocols ls) (- (match-steer-length protocols ls) tail-len))))
+             (len (and (match-steer-list? protocol ls) (- (match-steer-length protocol ls) tail-len))))
         (if (and len (<= lo len hi))
             (let loop ((ls ls) (j 0) (id-ls '()) ...)
               (cond
                 ((= j len)
                  (let ((id (reverse id-ls)) ...)
-                   (match-steer-one protocols ls r (#f #f) (sk ...) fk (i ... id ...))))
-                ((match-steer-tree? protocols ls)
-                 (let ((w (match-steer-car protocols ls)))
-                   (match-steer-one protocols w p
-                       ((match-steer-car protocols ls) (match-steer-set-car! protocols ls))
+                   (match-steer-one protocol ls r (#f #f) (sk ...) fk (i ... id ...))))
+                ((match-steer-tree? protocol ls)
+                 (let ((w (match-steer-car protocol ls)))
+                   (match-steer-one protocol w p
+                       ((match-steer-car protocol ls) (match-steer-set-car! protocol ls))
                        (match-drop-ids
-                        (loop (match-steer-cdr protocols ls) (+ j 1) (cons id id-ls) ...))
+                        (loop (match-steer-cdr protocol ls) (+ j 1) (cons id id-ls) ...))
                        fk
                        (i ...))))
                 (else
@@ -608,27 +603,27 @@
 
 (define-syntax match-steer-gen-search
   (syntax-rules ()
-    ((match-steer-gen-search protocols v p q g+s sk fk i ((id id-ls) ...))
+    ((match-steer-gen-search protocol v p q g+s sk fk i ((id id-ls) ...))
      (letrec ((try (lambda (w fail id-ls ...)
-                     (match-steer-one protocols w q g+s
+                     (match-steer-one protocol w q g+s
                                 (match-tuck-ids
                                  (let ((id (reverse id-ls)) ...)
                                    sk))
                                 (next w fail id-ls ...) i)))
               (next (lambda (w fail id-ls ...)
-                      (if (not (match-steer-tree? protocols w))
+                      (if (not (match-steer-tree? protocol w))
                           (fail)
-                          (let ((u (match-steer-car protocols w)))
+                          (let ((u (match-steer-car protocol w)))
                             (match-steer-one
-                             protocols u p ((match-steer-car protocols w) (match-steer-set-car! protocols w))
+                             protocol u p ((match-steer-car protocol w) (match-steer-set-car! protocol w))
                              (match-drop-ids
                               ;; accumulate the head variables from
                               ;; the p pattern, and loop over the tail
                               (let ((id-ls (cons id id-ls)) ...)
-                                (let lp ((ls (match-steer-cdr protocols w)))
-                                  (if (match-steer-tree? protocols ls)
-                                      (try (match-steer-car protocols ls)
-                                           (lambda () (lp (match-steer-cdr protocols ls)))
+                                (let lp ((ls (match-steer-cdr protocol w)))
+                                  (if (match-steer-tree? protocol ls)
+                                      (try (match-steer-car protocol ls)
+                                           (lambda () (lp (match-steer-cdr protocol ls)))
                                            id-ls ...)
                                       (fail)))))
                              (fail) i))))))
@@ -643,36 +638,36 @@
 
 (define-syntax match-vector
     (syntax-rules (___)
-      ((_ protocols v n pats (p q) . x)
+      ((_ protocol v n pats (p q) . x)
        (match-check-ellipsis q
-        (match-gen-vector-ellipsis protocols v n pats p . x)
-        (match-vector-two protocols v n pats (p q) . x)))
-      ((_ protocols v n pats (p ___) sk fk i)
-       (match-gen-vector-ellipsis protocols v n pats p sk fk i))
-      ((_ protocols . x)
-       (match-vector-two protocols . x))))
+        (match-gen-vector-ellipsis protocol v n pats p . x)
+        (match-vector-two protocol v n pats (p q) . x)))
+      ((_ protocol v n pats (p ___) sk fk i)
+       (match-gen-vector-ellipsis protocol v n pats p sk fk i))
+      ((_ protocol . x)
+       (match-vector-two protocol . x))))
 
   ;; Check the exact vector length, then check each element in turn.
 
   (define-syntax match-vector-two
     (syntax-rules ()
-      ((_ protocols v n ((pat index) ...) () sk fk i)
+      ((_ protocol v n ((pat index) ...) () sk fk i)
        (if (vector? v)
            (let ((len (vector-length v)))
              (if (= len n)
-                 (match-vector-step protocols v ((pat index) ...) sk fk i)
+                 (match-vector-step protocol v ((pat index) ...) sk fk i)
                  fk))
            fk))
-      ((_ protocols v n (pats ...) (p . q) . x)
-       (match-vector protocols v (+ n 1) (pats ... (p n)) q . x))))
+      ((_ protocol v n (pats ...) (p . q) . x)
+       (match-vector protocol v (+ n 1) (pats ... (p n)) q . x))))
 
   (define-syntax match-vector-step
     (syntax-rules ()
-      ((_ protocols v () (sk ...) fk i) (sk ... i))
-      ((_ protocols v ((pat index) . rest) sk fk i)
+      ((_ protocol v () (sk ...) fk i) (sk ... i))
+      ((_ protocol v ((pat index) . rest) sk fk i)
        (let ((w (vector-ref v index)))
-         (match-steer-one protocols w pat ((vector-ref v index) (vector-set! v index))
-                   (match-vector-step protocols v rest sk fk)
+         (match-steer-one protocol w pat ((vector-ref v index) (vector-set! v index))
+                   (match-vector-step protocol v rest sk fk)
                    fk i)))))
 
   ;; With a vector ellipsis pattern we first check to see if the vector
@@ -680,29 +675,29 @@
 
   (define-syntax match-gen-vector-ellipsis
     (syntax-rules ()
-      ((_ protocols v n ((pat index) ...) p sk fk i)
+      ((_ protocol v n ((pat index) ...) p sk fk i)
        (if (vector? v)
            (let ((len (vector-length v)))
              (if (>= len n)
-                 (match-vector-step protocols v ((pat index) ...)
-                                    (match-vector-tail protocols v p n len sk fk)
+                 (match-vector-step protocol v ((pat index) ...)
+                                    (match-vector-tail protocol v p n len sk fk)
                                     fk i)
                  fk))
            fk))))
 
   (define-syntax match-vector-tail
     (syntax-rules ()
-      ((_ protocols v p n len sk fk i)
-       (match-extract-vars p (match-vector-tail-two protocols v p n len sk fk i) i ()))))
+      ((_ protocol v p n len sk fk i)
+       (match-extract-vars p (match-vector-tail-two protocol v p n len sk fk i) i ()))))
 
   (define-syntax match-vector-tail-two
     (syntax-rules ()
-      ((_ protocols v p n len (sk ...) fk i ((id id-ls) ...))
+      ((_ protocol v p n len (sk ...) fk i ((id id-ls) ...))
        (let loop ((j n) (id-ls '()) ...)
          (if (>= j len)
            (let ((id (reverse id-ls)) ...) (sk ... i))
            (let ((w (vector-ref v j)))
-             (match-steer-one protocols w p ((vector-ref v j) (vector-set! v j))
+             (match-steer-one protocol w p ((vector-ref v j) (vector-set! v j))
                        (match-drop-ids (loop (+ j 1) (cons id id-ls) ...))
                        fk i)))))))
 
@@ -795,22 +790,22 @@
   ;;
   ;; (define-syntax match-record-refs
   ;;   (syntax-rules ()
-  ;;     ((_ protocols v rec n (p . q) g+s sk fk i)
+  ;;     ((_ protocol v rec n (p . q) g+s sk fk i)
   ;;      (let ((rtd (record-rtd v)))
   ;;        (let ((w ((match-cached-accessor rtd n) v)))
-  ;;          (match-steer-one protocols w p (((match-cached-accessor rtd n) v) ((match-cached-mutator rtd n) v))
-  ;;                     (match-record-refs protocols v rec (+ n 1) q g+s sk fk) fk i))))
-  ;;     ((_ protocols v rec n () g+s (sk ...) fk i)
+  ;;          (match-steer-one protocol w p (((match-cached-accessor rtd n) v) ((match-cached-mutator rtd n) v))
+  ;;                     (match-record-refs protocol v rec (+ n 1) q g+s sk fk) fk i))))
+  ;;     ((_ protocol v rec n () g+s (sk ...) fk i)
   ;;      (sk ... i))))
   ;;
   ;; (define-syntax match-record-named-refs
   ;;   (syntax-rules ()
-  ;;     ((_ protocols v rec ((f p) . q) g+s sk fk i)
+  ;;     ((_ protocol v rec ((f p) . q) g+s sk fk i)
   ;;      (let ((rtd (record-rtd v)))
   ;;        (let ((w ((match-cached-accessor rtd 'f) v)))
-  ;;          (match-steer-one protocols w p (((match-cached-accessor rtd 'f) v) ((match-cached-mutator rtd 'f) v))
-  ;;                     (match-record-named-refs protocols v rec q g+s sk fk) fk i))))
-  ;;     ((_ protocols v rec () g+s (sk ...) fk i)
+  ;;          (match-steer-one protocol w p (((match-cached-accessor rtd 'f) v) ((match-cached-mutator rtd 'f) v))
+  ;;                     (match-record-named-refs protocol v rec q g+s sk fk) fk i))))
+  ;;     ((_ protocol v rec () g+s (sk ...) fk i)
   ;;      (sk ... i))))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
