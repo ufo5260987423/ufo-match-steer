@@ -11,7 +11,6 @@
     match-let-steer
     match-let*-steer
     match-letrec-steer
-    define-match-protocol
     make-match-protocol
     match-protocol?
     match-protocol-predicate
@@ -26,6 +25,7 @@
     :_ ___ **1 =.. *.. *** ? get!)
   (import
     (rnrs base)
+    (rnrs control)
     (rnrs lists)
     (rnrs mutable-pairs)
     (rnrs hashtables)
@@ -60,6 +60,15 @@
   ;; Tree access protocol
 
   (define-record-type match-protocol
+    (protocol
+      (lambda (new)
+        (case-lambda
+          [(predicate expression children first-child rest-children)
+           (new predicate expression children first-child rest-children #f #f)]
+          [(predicate expression children first-child rest-children
+                        first-child-setter rest-children-setter)
+           (new predicate expression children first-child rest-children
+                first-child-setter rest-children-setter)])))
     (fields
       (immutable predicate)
       (immutable expression-getter)
@@ -68,31 +77,6 @@
       (immutable rest-children-getter)
       (immutable first-child-setter)
       (immutable rest-children-setter)))
-
-  (define-syntax define-match-protocol
-    (syntax-rules (predicate: expression: children: first-child: rest-children:
-                   first-child-setter: rest-children-setter:)
-      ((_ name
-          predicate: predicate
-          expression: expression
-          children: children
-          first-child: first-child
-          rest-children: rest-children)
-       (define name
-         (make-match-protocol predicate expression children first-child
-                                rest-children #f #f)))
-      ((_ name
-          predicate: predicate
-          expression: expression
-          children: children
-          first-child: first-child
-          rest-children: rest-children
-          first-child-setter: first-child-setter
-          rest-children-setter: rest-children-setter)
-       (define name
-         (make-match-protocol predicate expression children first-child
-                                rest-children first-child-setter
-                                rest-children-setter)))))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; Runtime protocol selection helpers
