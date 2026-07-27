@@ -54,7 +54,7 @@
       [(_ name* ...)
        (begin (define-auxiliary-keyword name*) ...)]))
 
-  (define-auxiliary-keywords :_ ___ **1 =.. *.. *** ? $ struct & object get!)
+  (define-auxiliary-keywords :_ ___ **1 =.. *.. *** ? get!)
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; Tree access protocol
@@ -244,7 +244,7 @@
   ;; pattern so far.
 
   (define-syntax match-steer-two
-    (syntax-rules (:_ ___ **1 =.. *.. *** quote quasiquote ? $ struct & object = and or not set! get!)
+    (syntax-rules (:_ ___ **1 =.. *.. *** quote quasiquote ? = and or not set! get!)
       ((match-steer-two protocols v () g+s (sk ...) fk i)
        (if (match-steer-null-tree? protocols v) (sk ... i) fk))
       ((match-steer-two protocols v (quote p) g+s (sk ...) fk i)
@@ -843,17 +843,20 @@
   ;; (match-extract-vars pattern continuation (ids ...) (new-vars ...))
 
   (define-syntax match-extract-vars
-    (syntax-rules (:_ ___ **1 =.. *.. *** ? $ struct & object = quote quasiquote and or not get! set!)
+    (syntax-rules (:_ ___ **1 =.. *.. *** ? = quote quasiquote and or not get! set!)
       ((match-extract-vars (? pred . p) . x)
        (match-extract-vars p . x))
-      ((match-extract-vars ($ rec . p) . x)
-       (match-extract-vars p . x))
-      ((match-extract-vars (struct rec . p) . x)
-       (match-extract-vars p . x))
-      ((match-extract-vars (& rec (f p) ...) . x)
-       (match-extract-vars (p ...) . x))
-      ((match-extract-vars (object rec (f p) ...) . x)
-       (match-extract-vars (p ...) . x))
+      ;; Record-matching patterns ($ struct & object) are reserved for a
+      ;; future design and disabled for now.
+      ;;
+      ;; ((match-extract-vars ($ rec . p) . x)
+      ;;  (match-extract-vars p . x))
+      ;; ((match-extract-vars (struct rec . p) . x)
+      ;;  (match-extract-vars p . x))
+      ;; ((match-extract-vars (& rec (f p) ...) . x)
+      ;;  (match-extract-vars (p ...) . x))
+      ;; ((match-extract-vars (object rec (f p) ...) . x)
+      ;;  (match-extract-vars (p ...) . x))
       ((match-extract-vars (= proc p) . x)
        (match-extract-vars p . x))
       ((match-extract-vars (quote x) (k ...) i v)
