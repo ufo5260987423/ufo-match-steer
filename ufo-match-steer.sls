@@ -11,7 +11,6 @@
     match-let-steer
     match-let*-steer
     match-letrec-steer
-    match-named-let-steer
     define-match-protocol
     make-match-protocol
     match-protocol?

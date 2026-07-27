@@ -183,12 +183,9 @@
      [b (tree-node-expression a)])
     b))
 
-(test-equal "match-named-let-steer recursive sum"
+(test-equal "match-let-steer named let recursive sum"
   6
-  ;; match-named-let-steer is exported as the auxiliary behind
-  ;; match-let-steer's named-let form; its direct syntax includes an
-  ;; empty accumulator before the binding clauses.
-  (match-named-let-steer tree-node-protocol sum () ([n 3] [acc 0])
+  (match-let-steer tree-node-protocol sum ([n 3] [acc 0])
     (if (= n 0)
         acc
         (sum (- n 1) (+ acc n)))))
