@@ -146,58 +146,6 @@
      [`(lambda (x) ,body) body]
      [else 'no-match])))
 
-;; P0 tests for the core derived macros and multi-protocol support.
-
-(test-equal "match-lambda-steer"
-  '(x y)
-  (tree-node-expression
-   ((match-lambda-steer tree-node-protocol
-      [('lambda params body) params]
-      [else 'no-match])
-    (tn '(lambda (x y) z)
-        (leaf 'lambda)
-        (tn '(x y) (leaf 'x) (leaf 'y))
-        (leaf 'z)))))
-
-(test-equal "match-lambda*-steer"
-  '(a b c)
-  (node-exprs
-   ((match-lambda*-steer tree-node-protocol
-      [(a b c) (list a b c)]
-      [else 'no-match])
-    (leaf 'a) (leaf 'b) (leaf 'c))))
-
-(test-equal "match-let-steer parallel bindings"
-  '(x y z)
-  (node-exprs
-   (match-let-steer tree-node-protocol
-     ([(a b) (list (leaf 'x) (leaf 'y))]
-      [c (leaf 'z)])
-     (list a b c))))
-
-(test-equal "match-let*-steer sequential bindings"
-  'x
-  (match-let*-steer tree-node-protocol
-    ([(a) (list (leaf 'x))]
-     [b (tree-node-expression a)])
-    b))
-
-(test-equal "match-let-steer named let recursive sum"
-  6
-  (match-let-steer tree-node-protocol sum ([n 3] [acc 0])
-    (if (= n 0)
-        acc
-        (sum (- n 1) (+ acc n)))))
-
-(test-equal "match-letrec-steer mutually recursive functions"
-  #t
-  (match-letrec-steer tree-node-protocol
-    ([(even? odd?)
-      (list
-       (lambda (n) (if (= n 0) #t (odd? (- n 1))))
-       (lambda (n) (if (= n 0) #f (even? (- n 1)))))])
-    (even? 10)))
-
 ;; P1/P2/P3 tests for pattern features, advanced patterns, mutable
 ;; protocol, and empty-list matching.
 
@@ -549,30 +497,6 @@
     [#(a b) 'short]
     [else 'no-match]))
 
-(test-equal "match-letrec-steer simple non-function binding"
-  'x
-  (tree-node-expression
-   (match-letrec-steer tree-node-protocol
-     ([x (leaf 'x)])
-     x)))
-
-;; Further edge-case tests.
-
-(test-equal "match-lambda*-steer with zero arguments"
-  'empty
-  ((match-lambda*-steer tree-node-protocol
-     [() 'empty]
-     [else 'non-empty])))
-
-(test-equal "nested match-let-steer and match-let*-steer"
-  '(x y)
-  (match-let-steer tree-node-protocol
-    ([(a b) (list (leaf 'x) (leaf 'y))])
-    (match-let*-steer tree-node-protocol
-      ([c a]
-       [d b])
-      (list (tree-node-expression c) (tree-node-expression d)))))
-
 (test-equal "ellipsis on empty non-tree value does not match"
   'no-match
   (match-steer tree-node-protocol
@@ -619,26 +543,6 @@
          (leaf 'x))
      [('lambda params body) body]
      [else 'no-match])))
-
-(test-equal "match-lambda-steer with multiple clauses"
-  'body
-  (tree-node-expression
-   ((match-lambda-steer tree-node-protocol
-      [('lambda params body) body]
-      [('define name value) value]
-      [else 'no-match])
-    (tn '(lambda (x) body)
-        (leaf 'lambda)
-        (tn '(x) (leaf 'x))
-        (leaf 'body)))))
-
-(test-equal "match-letrec-steer nested patterns"
-  '(x y)
-  (let ([result
-         (match-letrec-steer tree-node-protocol
-           ([(a b) (list (leaf 'x) (leaf 'y))])
-           (list (tree-node-expression a) (tree-node-expression b)))])
-    result))
 
 (test-end)
 

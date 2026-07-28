@@ -6,11 +6,6 @@
 (library (ufo-match-steer)
   (export
     match-steer
-    match-lambda-steer
-    match-lambda*-steer
-    match-let-steer
-    match-let*-steer
-    match-letrec-steer
     make-match-protocol
     match-protocol?
     match-protocol-predicate
@@ -161,10 +156,9 @@
          ((match-protocol-rest-children-setter protocol) v new-elements)]
         [else (assertion-violation 'match-steer-set-cdr! "not a tree value" v)])))
 
-  ;; Derived macros such as match-lambda*-steer and match-let-steer may
-  ;; receive ordinary Scheme lists (e.g. argument lists or parallel
-  ;; binding values).  Wrap them in a tail value so they can still be
-  ;; matched, while direct match-steer calls remain strict.
+  ;; The = transformation may produce an ordinary Scheme list.  Wrap it
+  ;; in a tail value so it can still be matched, while direct
+  ;; match-steer calls remain strict.
   (define (match-steer-wrap-value protocol v)
     (if (or (match-tail? v)
             ((match-protocol-predicate protocol) v)
@@ -928,159 +922,6 @@
       ))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  ;; Gimme some sugar baby.
-
-  ;;> Shortcut for \scheme{lambda} + \scheme{match-steer}.  Creates a
-  ;;> procedure of one argument, and matches that argument against each
-  ;;> clause.
-
-  (define-syntax match-lambda-steer
-    (syntax-rules ()
-      ((_ protocol (pattern . body) ...)
-       (lambda (expr) (match-steer protocol expr (pattern . body) ...)))))
-
-  ;;> Similar to \scheme{match-lambda-steer}.  Creates a procedure of any
-  ;;> number of arguments, and matches the argument list against each
-  ;;> clause.
-
-  (define-syntax match-lambda*-steer
-    (syntax-rules ()
-      ((_ protocol (pattern . body) ...)
-       (lambda expr (match-steer protocol (match-steer-wrap-value protocol expr) (pattern . body) ...)))))
-
-  ;;> Matches each var to the corresponding expression, and evaluates
-  ;;> the body with all match variables in scope.  Raises an error if
-  ;;> any of the expressions fail to match.  Syntax analogous to named
-  ;;> let can also be used for recursive functions which match on their
-  ;;> arguments as in \scheme{match-lambda*-steer}.
-
-  (define-syntax match-let-steer
-    (syntax-rules ()
-      ((_ protocol ((var value) ...) . body)
-       (match-let-steer/aux protocol () () ((var value) ...) . body))
-      ((_ protocol loop ((var init) ...) . body)
-       (match-named-let-steer protocol loop () ((var init) ...) . body))))
-
-  (define-syntax match-let-steer/aux
-    (syntax-rules ()
-      ((_ protocol ((var expr) ...) () () . body)
-       (let ((var expr) ...) . body))
-      ((_ protocol ((var expr) ...) ((pat tmp) ...) () . body)
-       (let ((var expr) ...)
-         (match-let*-steer protocol ((pat tmp) ...)
-           . body)))
-      ((_ protocol (v ...) (p ...) (((a . b) expr) . rest) . body)
-       (match-let-steer/aux protocol (v ... (tmp expr)) (p ... ((a . b) tmp)) rest . body))
-      ((_ protocol (v ...) (p ...) ((#(a ...) expr) . rest) . body)
-       (match-let-steer/aux protocol (v ... (tmp expr)) (p ... (#(a ...) tmp)) rest . body))
-      ((_ protocol (v ...) (p ...) ((a expr) . rest) . body)
-       (match-let-steer/aux protocol (v ... (a expr)) (p ...) rest . body))))
-
-  (define-syntax match-named-let-steer
-    (syntax-rules ()
-      ((_ protocol loop ((pat expr var) ...) () . body)
-       (let loop ((var expr) ...)
-         (match-let-steer protocol ((pat var) ...)
-           . body)))
-      ((_ protocol loop (v ...) ((pat expr) . rest) . body)
-       (match-named-let-steer protocol loop (v ... (pat expr tmp)) rest . body))))
-
-  ;;> \macro{(match-let*-steer protocol ((var value) ...) body ...)}
-
-  ;;> Similar to \scheme{match-let-steer}, but analogously to \scheme{let*}
-  ;;> matches and binds the variables in sequence, with preceding match
-  ;;> variables in scope.
-
-  (define-syntax match-let*-steer
-    (syntax-rules ()
-      ((_ protocol () . body)
-       (let () . body))
-      ((_ protocol ((pat expr) . rest) . body)
-       (match-steer protocol (match-steer-wrap-value protocol expr) (pat (match-let*-steer protocol rest . body))))))
-
-  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  ;; Challenge stage - unhygienic insertion.
-  ;;
-  ;; It's possible to implement match-letrec without unhygienic
-  ;; insertion by building the let+set! logic directly into the match
-  ;; code above (passing a parameter to distinguish let vs let).
-  ;; However, it makes the code much more complicated, so we religate
-  ;; the complexity here.
-
-  ;;> Similar to \scheme{match-let-steer}, but analogously to \scheme{letrec}
-  ;;> matches and binds the variables with all match variables in scope.
-
-  (define-syntax match-letrec-steer
-    (syntax-rules ()
-      ((_ protocol ((pat val) ...) . body)
-       (match-letrec-steer-one protocol (pat ...) (((pat val) ...) . body) ()))))
-
-  ;; 1: extract all ids in all patterns
-  (define-syntax match-letrec-steer-one
-    (syntax-rules ()
-      ((_ protocol (pat . rest) expr ((id tmp) ...))
-       (match-extract-vars
-        pat (match-letrec-steer-one protocol rest expr) (id ...) ((id tmp) ...)))
-      ((_ protocol () expr ((id tmp) ...))
-       (match-letrec-steer-two protocol expr () ((id tmp) ...)))))
-
-  ;; 2: rewrite ids
-  (define-syntax match-letrec-steer-two
-    (syntax-rules ()
-      ((_ protocol (() . body) ((var2 val2) ...) ((id tmp) ...))
-       ;; We know the ids, their tmp names, and the renamed patterns
-       ;; with the tmp names - expand to the classic letrec pattern of
-       ;; let+set!.  That is, we bind the original identifiers written
-       ;; in the source with let, run match on their renamed versions,
-       ;; then set! the originals to the matched values.
-       (let ((id (if #f #f)) ...)
-         (match-let-steer protocol ((var2 val2) ...)
-            (set! id tmp) ...
-            . body)))
-      ((_ protocol (((var val) . rest) . body) ((var2 val2) ...) ids)
-       (match-rewrite
-        var
-        ids
-        (match-letrec-steer-two-step protocol (rest . body) ((var2 val2) ...) ids val)))))
-
-  (define-syntax match-letrec-steer-two-step
-    (syntax-rules ()
-      ((_ protocol next (rewrites ...) ids val var)
-       (match-letrec-steer-two protocol next (rewrites ... (var val)) ids))))
-
-  ;; This is where the work is done.  To rewrite all occurrences of any
-  ;; id with its tmp, we need to walk the expression, using CPS to
-  ;; restore the original structure.  We also need to be careful to pass
-  ;; the tmp directly to the macro doing the insertion so that it
-  ;; doesn't get renamed.  This trick was originally found by Al*
-  ;; Petrofsky in a message titled "How to write seemingly unhygienic
-  ;; macros using syntax-rules" sent to comp.lang.scheme in Nov 2001.
-
-  (define-syntax match-rewrite
-    (syntax-rules (quote)
-      ((match-rewrite (quote x) ids (k ...))
-       (k ... (quote x)))
-      ((match-rewrite (p . q) ids k)
-       (match-rewrite p ids (match-rewrite2 q ids (match-cons k))))
-      ((match-rewrite () ids (k ...))
-       (k ... ()))
-      ((match-rewrite p () (k ...))
-       (k ... p))
-      ((match-rewrite p ((id tmp) . rest) (k ...))
-       (match-bound-identifier=? p id (k ... tmp) (match-rewrite p rest (k ...))))
-      ))
-
-  (define-syntax match-rewrite2
-    (syntax-rules ()
-      ((match-rewrite2 q ids (k ...) p)
-       (match-rewrite q ids (k ... p)))))
-
-  (define-syntax match-cons
-    (syntax-rules ()
-      ((match-cons (k ...) p q)
-       (k ... (p . q)))))
-
-  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; This is a little more complicated, and introduces a new let-syntax,
   ;; but should work portably in any R[56]RS Scheme.  Taylor Campbell
   ;; originally came up with the idea.
@@ -1118,17 +959,6 @@
                ;; otherwise x is a non-symbol datum
                ((sym? y sk fk) fk))))
          (sym? abracadabra success-k failure-k)))))
-
-  ;; This check is inlined in some cases above, but included here for
-  ;; the convenience of match-rewrite.
-  (define-syntax match-bound-identifier=?
-    (syntax-rules ()
-      ((match-bound-identifier=? a b sk fk)
-       (let-syntax ((b (syntax-rules ())))
-         (let-syntax ((eq (syntax-rules (b)
-                            ((eq b) sk)
-                            ((eq _) fk))))
-           (eq a))))))
 
   ;; Variant of above for a list of ids.
   (define-syntax match-bound-identifier-memv
