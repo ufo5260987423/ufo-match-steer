@@ -238,7 +238,7 @@
   '(a a a)
   (node-exprs
    (match-steer tree-node-protocol
-     (make-match-tail (list (leaf 'a) (leaf 'a) (leaf 'a)))
+     (tn 'expr (leaf 'a) (leaf 'a) (leaf 'a))
      [(a =.. 3) a]
      [else 'no-match])))
 
@@ -246,7 +246,7 @@
   '(a a)
   (node-exprs
    (match-steer tree-node-protocol
-     (make-match-tail (list (leaf 'a) (leaf 'a)))
+     (tn 'expr (leaf 'a) (leaf 'a))
      [(a *.. 1 3) a]
      [else 'no-match])))
 
@@ -516,8 +516,8 @@
   100
   (length
    (match-steer tree-node-protocol
-     (make-match-tail (map leaf (iota 100)))
-     [(a ...) a]
+     (apply tn 'expr (map leaf (iota 100)))
+     [(a =.. 100) a]
      [else 'no-match])))
 
 (define (raising-setter . args)

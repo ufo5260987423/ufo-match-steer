@@ -15,11 +15,6 @@
     match-protocol-rest-children-getter
     match-protocol-first-child-setter
     match-protocol-rest-children-setter
-    ;; Internal tail value representation exposed so custom protocols can
-    ;; return it from rest-children-getter and match it in predicates.
-    make-match-tail
-    match-tail?
-    match-tail-elements
     ;; Record-matching keywords ($ struct & object) are reserved for a
     ;; future design.  They are intentionally disabled for now.
     :_ ___ **1 =.. *.. *** ? get!)
