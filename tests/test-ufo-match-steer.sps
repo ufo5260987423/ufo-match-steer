@@ -101,17 +101,14 @@
      [('lambda (x) body) body]
      [else 'no-match])))
 
-;; Fallback to ordinary pairs/lists when value is not a tree-node.
-(test-equal "fallback to ordinary list"
-  '(2 3)
+;; Ordinary Scheme pairs/lists are never matched by a protocol matcher.
+(test-error "ordinary list rejected by tree-node protocol"
   (match-steer tree-node-protocol
     '(1 2 3)
     [(a b c) (list b c)]
     [else 'no-match]))
 
-;; Fallback to ordinary pairs with ellipsis.
-(test-equal "fallback with ellipsis"
-  '(2 3)
+(test-error "ordinary list with ellipsis rejected"
   (match-steer tree-node-protocol
     '(1 2 3)
     [(a b ...) b]
@@ -282,7 +279,7 @@
      [(a **1) a]
      [else 'no-match])))
 
-(test-equal "**1 does not match empty ordinary list"
+(test-equal "**1 does not match empty non-tree value"
   'empty
   (match-steer tree-node-protocol
     '()
@@ -293,7 +290,7 @@
   '(a a a)
   (node-exprs
    (match-steer tree-node-protocol
-     (list (leaf 'a) (leaf 'a) (leaf 'a))
+     (make-match-tail (list (leaf 'a) (leaf 'a) (leaf 'a)))
      [(a =.. 3) a]
      [else 'no-match])))
 
@@ -301,7 +298,7 @@
   '(a a)
   (node-exprs
    (match-steer tree-node-protocol
-     (list (leaf 'a) (leaf 'a))
+     (make-match-tail (list (leaf 'a) (leaf 'a)))
      [(a *.. 1 3) a]
      [else 'no-match])))
 
@@ -381,8 +378,8 @@
        (map mutable-node-expression (mutable-node-children m))]
       [else 'no-match])))
 
-(test-equal "empty list pattern on ordinary null"
-  'empty
+(test-equal "empty list pattern on ordinary null does not match"
+  'non-empty
   (match-steer tree-node-protocol
     '()
     [() 'empty]
@@ -467,21 +464,15 @@
      [(path *** 'target) path]
      [else 'no-match])))
 
-(test-equal "get! pattern on ordinary pair"
-  '(1 2 3)
+(test-equal "get! pattern on tree-node"
+  '(lambda x y)
   (match-steer tree-node-protocol
-    '(1 2 3)
-    [((get! g) b c) (list (g) b c)]
+    (tn '(lambda (x) y) (leaf 'lambda) (leaf 'x) (leaf 'y))
+    [((get! g) b c)
+     (list (tree-node-expression (g))
+           (tree-node-expression b)
+           (tree-node-expression c))]
     [else 'no-match]))
-
-(test-equal "set! pattern on ordinary pair"
-  '(99 2 3)
-  (let ([v '(1 2 3)])
-    (match-steer tree-node-protocol v
-      [((set! s) b c)
-       (s 99)
-       v]
-      [else 'no-match])))
 
 (test-assert "match-protocol? recognizes protocol"
   (match-protocol? tree-node-protocol))
@@ -582,8 +573,8 @@
        [d b])
       (list (tree-node-expression c) (tree-node-expression d)))))
 
-(test-equal "ellipsis on empty ordinary list"
-  '()
+(test-equal "ellipsis on empty non-tree value does not match"
+  'no-match
   (match-steer tree-node-protocol
     '()
     [(a ...) a]
@@ -601,7 +592,7 @@
   100
   (length
    (match-steer tree-node-protocol
-     (map leaf (iota 100))
+     (make-match-tail (map leaf (iota 100)))
      [(a ...) a]
      [else 'no-match])))
 

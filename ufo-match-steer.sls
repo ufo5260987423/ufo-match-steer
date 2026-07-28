@@ -20,6 +20,11 @@
     match-protocol-rest-children-getter
     match-protocol-first-child-setter
     match-protocol-rest-children-setter
+    ;; Internal tail value representation exposed so custom protocols can
+    ;; return it from rest-children-getter and match it in predicates.
+    make-match-tail
+    match-tail?
+    match-tail-elements
     ;; Record-matching keywords ($ struct & object) are reserved for a
     ;; future design.  They are intentionally disabled for now.
     :_ ___ **1 =.. *.. *** ? get!)
@@ -78,67 +83,94 @@
       (immutable first-child-setter)
       (immutable rest-children-setter)))
 
+  ;; A tail value wraps the remaining children of a protocol node.  It is
+  ;; returned by rest-children-getter and by match-steer-cdr so that list
+  ;; patterns decompose only protocol-compatible values, never ordinary
+  ;; Scheme pairs directly.
+  (define-record-type match-tail
+    (fields (immutable elements)))
+
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; Runtime protocol selection helpers
 
   (define (match-steer-find-protocol protocol v)
     (if ((match-protocol-predicate protocol) v) protocol #f))
 
+  ;; A value is a tree iff it is either a protocol node or a tail produced
+  ;; by match-steer-cdr/rest-children-getter.  Ordinary Scheme pairs and
+  ;; lists are never considered trees.
   (define (match-steer-tree? protocol v)
-    (or (pair? v)
+    (or (match-tail? v)
         (and (match-steer-find-protocol protocol v) #t)))
 
   (define (match-steer-null-tree? protocol v)
-    (or (null? v)
-        (let ([p (match-steer-find-protocol protocol v)])
-          (and p (null? ((match-protocol-children-getter p) v))))))
+    (cond
+      [(match-tail? v) (null? (match-tail-elements v))]
+      [((match-protocol-predicate protocol) v)
+       (null? ((match-protocol-children-getter protocol) v))]
+      [else #f]))
 
   (define (match-steer-expression protocol v)
-    (if (pair? v)
-        v
-        (let ([p (match-steer-find-protocol protocol v)])
-          (if p
-              ((match-protocol-expression-getter p) v)
-              v))))
+    (cond
+      [(match-tail? v) v]
+      [((match-protocol-predicate protocol) v)
+       ((match-protocol-expression-getter protocol) v)]
+      [else v]))
 
   (define (match-steer-car protocol v)
-    (if (pair? v)
-        (car v)
-        (let ([p (match-steer-find-protocol protocol v)])
-          ((match-protocol-first-child-getter p) v))))
+    (cond
+      [(match-tail? v) (car (match-tail-elements v))]
+      [((match-protocol-predicate protocol) v)
+       ((match-protocol-first-child-getter protocol) v)]
+      [else (assertion-violation 'match-steer-car "not a tree value" v)]))
 
   (define (match-steer-cdr protocol v)
-    (if (pair? v)
-        (cdr v)
-        (let ([p (match-steer-find-protocol protocol v)])
-          ((match-protocol-rest-children-getter p) v))))
+    (cond
+      [(match-tail? v) (make-match-tail (cdr (match-tail-elements v)))]
+      [((match-protocol-predicate protocol) v)
+       (make-match-tail ((match-protocol-rest-children-getter protocol) v))]
+      [else (assertion-violation 'match-steer-cdr "not a tree value" v)]))
 
   (define (match-steer-list? protocol v)
-    (or (null? v)
-        (if (pair? v)
-            (list? v)
-            (let ([p (match-steer-find-protocol protocol v)])
-              (and p (list? ((match-protocol-children-getter p) v)))))))
+    (or (match-tail? v)
+        (and (match-steer-find-protocol protocol v) #t)))
 
   (define (match-steer-length protocol v)
-    (if (pair? v)
-        (length v)
-        (let ([p (match-steer-find-protocol protocol v)])
-          (if p
-              (length ((match-protocol-children-getter p) v))
-              0))))
+    (cond
+      [(match-tail? v) (length (match-tail-elements v))]
+      [((match-protocol-predicate protocol) v)
+       (length ((match-protocol-children-getter protocol) v))]
+      [else 0]))
 
   (define (match-steer-set-car! protocol v new)
-    (if (pair? v)
-        (set-car! v new)
-        (let ([p (match-steer-find-protocol protocol v)])
-          ((match-protocol-first-child-setter p) v new))))
+    (cond
+      [(match-tail? v)
+       (set-car! (match-tail-elements v) new)]
+      [((match-protocol-predicate protocol) v)
+       ((match-protocol-first-child-setter protocol) v new)]
+      [else (assertion-violation 'match-steer-set-car! "not a tree value" v)]))
 
   (define (match-steer-set-cdr! protocol v new)
-    (if (pair? v)
-        (set-cdr! v new)
-        (let ([p (match-steer-find-protocol protocol v)])
-          ((match-protocol-rest-children-setter p) v new))))
+    (let ([new-elements (if (match-tail? new)
+                            (match-tail-elements new)
+                            new)])
+      (cond
+        [(match-tail? v)
+         (set-cdr! (match-tail-elements v) new-elements)]
+        [((match-protocol-predicate protocol) v)
+         ((match-protocol-rest-children-setter protocol) v new-elements)]
+        [else (assertion-violation 'match-steer-set-cdr! "not a tree value" v)])))
+
+  ;; Derived macros such as match-lambda*-steer and match-let-steer may
+  ;; receive ordinary Scheme lists (e.g. argument lists or parallel
+  ;; binding values).  Wrap them in a tail value so they can still be
+  ;; matched, while direct match-steer calls remain strict.
+  (define (match-steer-wrap-value protocol v)
+    (if (or (match-tail? v)
+            ((match-protocol-predicate protocol) v)
+            (not (or (pair? v) (null? v))))
+        v
+        (make-match-tail v)))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; force compile-time syntax errors with useful messages
@@ -248,25 +280,22 @@
       ((match-steer-two protocol v (? pred . p) g+s sk fk i)
        (if (pred v) (match-steer-one protocol v (and . p) g+s sk fk i) fk))
       ((match-steer-two protocol v (= proc p) . x)
-       (let ((w (proc v))) (match-steer-one protocol w p . x)))
+       (let ((w (match-steer-wrap-value protocol (proc v))))
+         (match-steer-one protocol w p . x)))
       ((match-steer-two protocol v (p ___ . r) g+s sk fk i)
        (match-extract-vars p (match-steer-gen-ellipsis protocol v p r g+s sk fk i) i ()))
       ((match-steer-two protocol v (p) g+s sk fk i)
-       (let ([p-found (match-steer-find-protocol protocol v)])
-         (if p-found
-             (if (match-steer-null-tree? protocol
-                   ((match-protocol-rest-children-getter p-found) v))
-                 (let ((w ((match-protocol-first-child-getter p-found) v)))
-                   (match-steer-one protocol w p
-                     (((match-protocol-first-child-getter p-found) v)
-                      (lambda (new)
-                        ((match-protocol-first-child-setter p-found) v new)))
-                     sk fk i))
-                 fk)
-             (if (and (pair? v) (null? (cdr v)))
-                 (let ((w (car v)))
-                   (match-steer-one protocol w p ((car v) (set-car! v)) sk fk i))
-                 fk))))
+       (if (match-steer-tree? protocol v)
+           (if (match-steer-null-tree? protocol (match-steer-cdr protocol v))
+               (let ((w (match-steer-car protocol v)))
+                 (match-steer-one protocol w p
+                   (w (match-steer-set-car! protocol v))
+                   sk fk i))
+               fk)
+           (if (pair? v)
+               (assertion-violation 'match-steer
+                 "ordinary pairs/lists are not supported by this protocol" v)
+               fk)))
       ((match-steer-two protocol v (p *** q) g+s sk fk i)
        (match-extract-vars p (match-steer-gen-search protocol v p q g+s sk fk i) i ()))
       ((match-steer-two protocol v (p *** . q) g+s sk fk i)
@@ -303,28 +332,20 @@
       ;;      (match-record-named-refs protocol v rec (p ...) g+s sk fk i)
       ;;      fk))
       ((match-steer-two protocol v (p . q) g+s sk fk i)
-       (let ([p-found (match-steer-find-protocol protocol v)])
-         (if p-found
-             (let ((w ((match-protocol-first-child-getter p-found) v))
-                   (x ((match-protocol-rest-children-getter p-found) v)))
-               (match-steer-one protocol w p
-                 (((match-protocol-first-child-getter p-found) v)
-                  (lambda (new)
-                    ((match-protocol-first-child-setter p-found) v new)))
-                 (match-steer-one protocol x q
-                   (((match-protocol-rest-children-getter p-found) v)
-                    (lambda (new)
-                      ((match-protocol-rest-children-setter p-found) v new)))
-                   sk fk)
-                 fk
-                 i))
-             (if (pair? v)
-                 (let ((w (car v)) (x (cdr v)))
-                   (match-steer-one protocol w p ((car v) (set-car! v))
-                     (match-steer-one protocol x q ((cdr v) (set-cdr! v)) sk fk)
-                     fk
-                     i))
-                 fk))))
+       (if (match-steer-tree? protocol v)
+           (let ((w (match-steer-car protocol v))
+                 (x (match-steer-cdr protocol v)))
+             (match-steer-one protocol w p
+               (w (match-steer-set-car! protocol v))
+               (match-steer-one protocol x q
+                 (x (match-steer-set-cdr! protocol v))
+                 sk fk)
+               fk
+               i))
+           (if (pair? v)
+               (assertion-violation 'match-steer
+                 "ordinary pairs/lists are not supported by this protocol" v)
+               fk)))
       ((match-steer-two protocol v #(p ...) g+s . x)
        (match-vector protocol v 0 () (p ...) . x))
       ;; Next line: replace '_' with ':_'. (FBE)
@@ -363,20 +384,19 @@
        (match-steer-quasiquote protocol v p g+s sk fk i . depth))
       ((_ protocol v (unquote-splicing p) g+s sk fk i x . depth)
        (match-steer-quasiquote protocol v p g+s sk fk i . depth))
+      ((_ protocol v () g+s sk fk i . depth)
+       (match-steer-two protocol v () g+s sk fk i))
       ((_ protocol v (p . q) g+s sk fk i . depth)
-       (let ([p-found (match-steer-find-protocol protocol v)])
-         (if p-found
-             (let ((w ((match-protocol-first-child-getter p-found) v))
-                   (x ((match-protocol-rest-children-getter p-found) v)))
-               (match-steer-quasiquote protocol w p g+s
-                 (match-steer-quasiquote-step protocol x q g+s sk fk depth)
-                 fk i . depth))
-             (if (pair? v)
-                 (let ((w (car v)) (x (cdr v)))
-                   (match-steer-quasiquote protocol w p g+s
-                     (match-steer-quasiquote-step protocol x q g+s sk fk depth)
-                     fk i . depth))
-                 fk))))
+       (if (match-steer-tree? protocol v)
+           (let ((w (match-steer-car protocol v))
+                 (x (match-steer-cdr protocol v)))
+             (match-steer-quasiquote protocol w p g+s
+               (match-steer-quasiquote-step protocol x q g+s sk fk depth)
+               fk i . depth))
+           (if (pair? v)
+               (assertion-violation 'match-steer
+                 "ordinary pairs/lists are not supported by this protocol" v)
+               fk)))
       ((_ protocol v #(elt ...) g+s sk fk i . depth)
        (if (vector? v)
            (let ((ls (vector->list v)))
@@ -443,8 +463,8 @@
     ((_ protocol v p () g+s (sk ...) fk i ((id id-ls) ...))
      (match-check-identifier p
        ;; simplest case equivalent to (p ...), just match the list
-       (let ((w v))
-         (if (match-steer-list? protocol w)
+       (let ((w (if (match-tail? v) (match-tail-elements v) v)))
+         (if (match-steer-list? protocol v)
              (match-steer-one protocol w p g+s (sk ...) fk i)
              fk))
        ;; simple case, match all elements of the list
@@ -932,7 +952,7 @@
   (define-syntax match-lambda*-steer
     (syntax-rules ()
       ((_ protocol (pattern . body) ...)
-       (lambda expr (match-steer protocol expr (pattern . body) ...)))))
+       (lambda expr (match-steer protocol (match-steer-wrap-value protocol expr) (pattern . body) ...)))))
 
   ;;> Matches each var to the corresponding expression, and evaluates
   ;;> the body with all match variables in scope.  Raises an error if
@@ -982,7 +1002,7 @@
       ((_ protocol () . body)
        (let () . body))
       ((_ protocol ((pat expr) . rest) . body)
-       (match-steer protocol expr (pat (match-let*-steer protocol rest . body))))))
+       (match-steer protocol (match-steer-wrap-value protocol expr) (pat (match-let*-steer protocol rest . body))))))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; Challenge stage - unhygienic insertion.
