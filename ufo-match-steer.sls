@@ -292,10 +292,8 @@
                    (w (match-steer-set-car! protocol v))
                    sk fk i))
                fk)
-           (if (pair? v)
-               (assertion-violation 'match-steer
-                 "ordinary pairs/lists are not supported by this protocol" v)
-               fk)))
+           (assertion-violation 'match-steer
+             "input is not supported by this protocol" v)))
       ((match-steer-two protocol v (p *** q) g+s sk fk i)
        (match-extract-vars p (match-steer-gen-search protocol v p q g+s sk fk i) i ()))
       ((match-steer-two protocol v (p *** . q) g+s sk fk i)
@@ -342,10 +340,8 @@
                  sk fk)
                fk
                i))
-           (if (pair? v)
-               (assertion-violation 'match-steer
-                 "ordinary pairs/lists are not supported by this protocol" v)
-               fk)))
+           (assertion-violation 'match-steer
+             "input is not supported by this protocol" v)))
       ((match-steer-two protocol v #(p ...) g+s . x)
        (match-vector protocol v 0 () (p ...) . x))
       ;; Next line: replace '_' with ':_'. (FBE)
@@ -393,10 +389,8 @@
              (match-steer-quasiquote protocol w p g+s
                (match-steer-quasiquote-step protocol x q g+s sk fk depth)
                fk i . depth))
-           (if (pair? v)
-               (assertion-violation 'match-steer
-                 "ordinary pairs/lists are not supported by this protocol" v)
-               fk)))
+           (assertion-violation 'match-steer
+             "input is not supported by this protocol" v)))
       ((_ protocol v #(elt ...) g+s sk fk i . depth)
        (if (vector? v)
            (let ((ls (vector->list v)))
