@@ -21,14 +21,10 @@
   (import
     (rnrs base)
     (rnrs control)
-    (rnrs lists)
     (rnrs mutable-pairs)
-    (rnrs hashtables)
     (rnrs records syntactic)
-    (rnrs records procedural)
-    (rnrs records inspection)
     (rnrs syntax-case)
-    (only (chezscheme) iota syntax-error))
+    (only (chezscheme) syntax-error))
 
   ;; We declare and export the symbols used as auxiliary identifiers
   ;; in 'syntax-rules' to make them work in Chez Scheme's interactive
@@ -301,23 +297,6 @@
         (match-steer-gen-ellipsis/range protocol n m v p r g+s sk fk i) i ()))
       ;; Record-matching patterns ($ struct & object) are reserved for a
       ;; future design and disabled for now.
-      ;;
-      ;; ((match-steer-two protocol v ($ rec p ...) g+s sk fk i)
-      ;;  (if (is-a? v rec)
-      ;;      (match-record-refs protocol v rec 0 (p ...) g+s sk fk i)
-      ;;      fk))
-      ;; ((match-steer-two protocol v (struct rec p ...) g+s sk fk i)
-      ;;  (if (is-a? v rec)
-      ;;      (match-record-refs v rec 0 (p ...) g+s sk fk i)
-      ;;      fk))
-      ;; ((match-steer-two protocol v (& rec p ...) g+s sk fk i)
-      ;;  (if (is-a? v rec)
-      ;;      (match-record-named-refs protocol v rec (p ...) g+s sk fk i)
-      ;;      fk))
-      ;; ((match-steer-two protocol v (object rec p ...) g+s sk fk i)
-      ;;  (if (is-a? v rec)
-      ;;      (match-record-named-refs protocol v rec (p ...) g+s sk fk i)
-      ;;      fk))
       ((match-steer-two protocol v (p . q) g+s sk fk i)
        (if (match-steer-tree? protocol v)
            (let ((w (match-steer-car protocol v))
@@ -705,113 +684,6 @@
                        fk i)))))))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  ;; Cached record accessors/mutators
-  ;;
-  ;; Creating record accessors/mutators involves mapping field names to
-  ;; indices and calling record-accessor/record-mutator.  These are
-  ;; cached per RTD and field to avoid recomputing them on every match.
-
-  (define *match-accessor-cache* (make-eq-hashtable))
-  (define *match-mutator-cache* (make-eq-hashtable))
-
-  (define (match-vector-index vec pred)
-    (let loop ([i 0])
-      (cond
-        [(= i (vector-length vec)) #f]
-        [(pred (vector-ref vec i)) i]
-        [else (loop (+ i 1))])))
-
-  (define (match-cached-accessor rtd field)
-    (let ([field-table (or (hashtable-ref *match-accessor-cache* rtd #f)
-                           (let ([t (make-eq-hashtable)])
-                             (hashtable-set! *match-accessor-cache* rtd t)
-                             t))])
-      (or (hashtable-ref field-table field #f)
-          (let* ([fields (record-type-field-names rtd)]
-                 [idx (if (number? field)
-                          field
-                          (match-vector-index fields (lambda (f) (eq? f field))))]
-                 [acc (record-accessor rtd idx)])
-            (hashtable-set! field-table field acc)
-            acc))))
-
-  (define (match-cached-mutator rtd field)
-    (let ([field-table (or (hashtable-ref *match-mutator-cache* rtd #f)
-                           (let ([t (make-eq-hashtable)])
-                             (hashtable-set! *match-mutator-cache* rtd t)
-                             t))])
-      (or (hashtable-ref field-table field #f)
-          (let* ([fields (record-type-field-names rtd)]
-                 [idx (if (number? field)
-                          field
-                          (match-vector-index fields (lambda (f) (eq? f field))))]
-                 [mut (record-mutator rtd idx)])
-            (hashtable-set! field-table field mut)
-            mut))))
-
-  (define-syntax is-a?
-    (syntax-rules ()
-      ((_ rec rtn)
-       (let ((rec: rec))
-        (and (record? rec:)
-             (eq? (record-type-name (record-rtd rec:)) (quote rtn)))))))
-
-  (define-syntax slot-ref
-    (syntax-rules ()
-      ((_ rtn rec n)
-       (let ((n: n) (rec: rec))
-         (if (number? n:)
-             ((record-accessor (record-rtd rec:) n:) rec:)
-             ;; If it's not a number, then it should be a symbol with
-             ;; the name of a field.
-             (let* ((rtd (record-rtd rec:))
-                    (fields (record-type-field-names rtd))
-                    (fields-idxs (map (lambda (f i) (cons f i))
-                                      (vector->list fields)
-                                      (iota (vector-length fields))))
-                    (idx (cdr (assv n: fields-idxs))))
-               ((record-accessor rtd idx) rec:)))))))
-
-  (define-syntax slot-set!
-    (syntax-rules ()
-      ((_ rtn rec n val)
-       (let ((n: n) (rec: rec))
-         (if (number? n:)
-             ((record-mutator (record-rtd rec:) n) rec: val)
-             ;; If it's not a number, then it should be a symbol with
-             ;; the name of a field.
-             (let* ((rtd (record-rtd rec:))
-                    (fields (record-type-field-names rtd))
-                    (fields-idxs (map (lambda (f i) (cons f i))
-                                      (vector->list fields)
-                                      (iota (vector-length fields))))
-                    (idx (cdr (assv n: fields-idxs))))
-               ((record-mutator rtd idx) rec: val)))))))
-
-  ;; Record-matching helpers are reserved for a future design and
-  ;; disabled together with the ($ struct & object) patterns.
-  ;;
-  ;; (define-syntax match-record-refs
-  ;;   (syntax-rules ()
-  ;;     ((_ protocol v rec n (p . q) g+s sk fk i)
-  ;;      (let ((rtd (record-rtd v)))
-  ;;        (let ((w ((match-cached-accessor rtd n) v)))
-  ;;          (match-steer-one protocol w p (((match-cached-accessor rtd n) v) ((match-cached-mutator rtd n) v))
-  ;;                     (match-record-refs protocol v rec (+ n 1) q g+s sk fk) fk i))))
-  ;;     ((_ protocol v rec n () g+s (sk ...) fk i)
-  ;;      (sk ... i))))
-  ;;
-  ;; (define-syntax match-record-named-refs
-  ;;   (syntax-rules ()
-  ;;     ((_ protocol v rec ((f p) . q) g+s sk fk i)
-  ;;      (let ((rtd (record-rtd v)))
-  ;;        (let ((w ((match-cached-accessor rtd 'f) v)))
-  ;;          (match-steer-one protocol w p (((match-cached-accessor rtd 'f) v) ((match-cached-mutator rtd 'f) v))
-  ;;                     (match-record-named-refs protocol v rec q g+s sk fk) fk i))))
-  ;;     ((_ protocol v rec () g+s (sk ...) fk i)
-  ;;      (sk ... i))))
-
-  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; Extract all identifiers in a pattern.  A little more complicated
   ;; than just looking for symbols, we need to ignore special keywords
   ;; and non-pattern forms (such as the predicate expression in ?
@@ -830,15 +702,6 @@
        (match-extract-vars p . x))
       ;; Record-matching patterns ($ struct & object) are reserved for a
       ;; future design and disabled for now.
-      ;;
-      ;; ((match-extract-vars ($ rec . p) . x)
-      ;;  (match-extract-vars p . x))
-      ;; ((match-extract-vars (struct rec . p) . x)
-      ;;  (match-extract-vars p . x))
-      ;; ((match-extract-vars (& rec (f p) ...) . x)
-      ;;  (match-extract-vars (p ...) . x))
-      ;; ((match-extract-vars (object rec (f p) ...) . x)
-      ;;  (match-extract-vars (p ...) . x))
       ((match-extract-vars (= proc p) . x)
        (match-extract-vars p . x))
       ((match-extract-vars (quote x) (k ...) i v)

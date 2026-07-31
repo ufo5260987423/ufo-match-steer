@@ -124,16 +124,6 @@
      [x x]
      [else 'no-match])))
 
-;; Record patterns ($ struct & object) are reserved for a future design
-;; and disabled in the library.  Kept here as a placeholder.
-;;
-;; (test-equal "record pattern on tree-node"
-;;   '(expr ())
-;;   (match-steer tree-node-protocol
-;;     (leaf 'expr)
-;;     [($ tree-node expr children) (list expr children)]
-;;     [else 'no-match]))
-
 ;; Quasiquote pattern on tree-node.
 (test-equal "quasiquote on tree-node"
   'x
@@ -520,7 +510,7 @@
      [(a =.. 100) a]
      [else 'no-match])))
 
-(define (raising-setter . args)
+(define (raising-setter)
   (error 'setter "setter should not be called during non-mutating match"))
 
 (define no-setter-protocol
