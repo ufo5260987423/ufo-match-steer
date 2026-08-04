@@ -157,7 +157,7 @@
         (leaf 'lambda)
         (tn '(x) (leaf 'x))
         (leaf 'x))
-    [(= tree-node-expression ('lambda params body)) (list params body)]
+    [(:= tree-node-expression ('lambda params body)) (list params body)]
     [else 'no-match]))
 
 (test-equal "and pattern"
@@ -179,7 +179,7 @@
   'not-symbol
   (match-steer tree-node-protocol
     (leaf 42)
-    [(= tree-node-expression (not (? symbol?))) 'not-symbol]
+    [(:= tree-node-expression (not (? symbol?))) 'not-symbol]
     [else 'no-match]))
 
 (test-equal "vector pattern"

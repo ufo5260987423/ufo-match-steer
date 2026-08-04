@@ -17,7 +17,7 @@
     match-protocol-rest-children-setter
     ;; Record-matching keywords ($ struct & object) are reserved for a
     ;; future design.  They are intentionally disabled for now.
-    :_ ___ **1 =.. *.. *** ? get!)
+    :_ ___ **1 =.. *.. *** ? := get!)
   (import
     (rnrs base)
     (rnrs control)
@@ -45,7 +45,7 @@
       [(_ name* ...)
        (begin (define-auxiliary-keyword name*) ...)]))
 
-  (define-auxiliary-keywords :_ ___ **1 =.. *.. *** ? get!)
+  (define-auxiliary-keywords :_ ___ **1 =.. *.. *** ? := get!)
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; Tree access protocol
@@ -147,7 +147,7 @@
          ((match-protocol-rest-children-setter protocol) v new-elements)]
         [else (assertion-violation 'match-steer-set-cdr! "not a tree value" v)])))
 
-  ;; The = transformation may produce an ordinary Scheme list.  Wrap it
+  ;; The := transformation may produce an ordinary Scheme list.  Wrap it
   ;; in a tail value so it can still be matched, while direct
   ;; match-steer calls remain strict.
   (define (match-steer-wrap-value protocol v)
@@ -240,7 +240,7 @@
   ;; pattern so far.
 
   (define-syntax match-steer-two
-    (syntax-rules (:_ ___ **1 =.. *.. *** quote quasiquote ? = and or not set! get!)
+    (syntax-rules (:_ ___ **1 =.. *.. *** quote quasiquote ? := and or not set! get!)
       ((match-steer-two protocol v () g+s (sk ...) fk i)
        (if (match-steer-null-tree? protocol v) (sk ... i) fk))
       ((match-steer-two protocol v (quote p) g+s (sk ...) fk i)
@@ -264,7 +264,7 @@
        (let ((setter (lambda (x) (s ... x)))) (sk ... i)))
       ((match-steer-two protocol v (? pred . p) g+s sk fk i)
        (if (pred v) (match-steer-one protocol v (and . p) g+s sk fk i) fk))
-      ((match-steer-two protocol v (= proc p) . x)
+      ((match-steer-two protocol v (:= proc p) . x)
        (let ((w (match-steer-wrap-value protocol (proc v))))
          (match-steer-one protocol w p . x)))
       ((match-steer-two protocol v (p ___ . r) g+s sk fk i)
@@ -697,12 +697,12 @@
   ;; (match-extract-vars pattern continuation (ids ...) (new-vars ...))
 
   (define-syntax match-extract-vars
-    (syntax-rules (:_ ___ **1 =.. *.. *** ? = quote quasiquote and or not get! set!)
+    (syntax-rules (:_ ___ **1 =.. *.. *** ? := quote quasiquote and or not get! set!)
       ((match-extract-vars (? pred . p) . x)
        (match-extract-vars p . x))
       ;; Record-matching patterns ($ struct & object) are reserved for a
       ;; future design and disabled for now.
-      ((match-extract-vars (= proc p) . x)
+      ((match-extract-vars (:= proc p) . x)
        (match-extract-vars p . x))
       ((match-extract-vars (quote x) (k ...) i v)
        (k ... v))

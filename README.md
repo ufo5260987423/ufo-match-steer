@@ -17,7 +17,7 @@ be ordinary Scheme pairs.
   variables, `:_`, literals, `quote`, `quasiquote`, vectors
 - Ellipsis variants: `...`, `___`, `**1`, `=..`, `*..`, `***`
 - Logic/combinators: `and`, `or`, `not`
-- Predicates and transformers: `?`, `=`
+- Predicates and transformers: `?`, `:=`
 - Mutability support: `set!`, `get!`
 - Record-matching keywords (`$`, `struct`, `&`, `object`) are reserved for a
   future design and currently disabled.
@@ -120,7 +120,7 @@ Define a record and a matching protocol, then use `match-steer`:
 | `(p *.. n m)` | between `n` and `m` repetitions |
 | `(p *** q)` | deep tree search |
 | `(? pred . p)` | predicate guard |
-| `(= proc p)` | transform value before matching |
+| `(:= proc p)` | transform value before matching |
 | `(and p ...)` | all patterns must match |
 | `(or p ...)` | any pattern matches |
 | `(not p)` | negation |
