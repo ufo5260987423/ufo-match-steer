@@ -1,4 +1,6 @@
 .akku
+*.akku
+*.akku.sig
 .vscode/
 2026*.txt
 *.so
