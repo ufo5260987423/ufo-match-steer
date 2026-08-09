@@ -1,13 +1,7 @@
 #!/usr/bin/env bash
 source .akku/bin/activate
 
-skip=(
-    "./tests/integration/output-identifier-types.sps" 
-    "./bin/parallel-log-debug.sps" 
-    "./bin/log-debug.sps" 
-    "./tests/integration/performance.sps" 
-    "./tests/analysis/identifier/test-auto-macro-resolve.sps"
-)
+skip=()
 
 success=0
 
