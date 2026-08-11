@@ -1,7 +1,7 @@
 # ufo-match-steer
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version: 1.1.0](https://img.shields.io/badge/Version-1.1.0-green.svg)]()
+[![Version: 1.1.1](https://img.shields.io/badge/Version-1.1.1-green.svg)]()
 
 A generic pattern-matching library for Chez Scheme (R6RS).  It extends the
 Alex-Shinn-style `match` macro so that list/pair patterns can be applied to
