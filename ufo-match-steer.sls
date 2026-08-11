@@ -96,6 +96,15 @@
        (null? ((match-protocol-children-getter protocol) v))]
       [else #f]))
 
+  ;; A tree is "non-empty" iff it has at least one child/element.  This is
+  ;; the protocol analog of PAIR? and is used to guard MATCH-STEER-CAR.
+  (define (match-steer-non-empty-tree? protocol v)
+    (cond
+      [(match-tail? v) (pair? (match-tail-elements v))]
+      [((match-protocol-predicate protocol) v)
+       (pair? ((match-protocol-children-getter protocol) v))]
+      [else #f]))
+
   (define (match-steer-expression protocol v)
     (cond
       [(match-tail? v) v]
@@ -270,15 +279,14 @@
       ((match-steer-two protocol v (p ___ . r) g+s sk fk i)
        (match-extract-vars p (match-steer-gen-ellipsis protocol v p r g+s sk fk i) i ()))
       ((match-steer-two protocol v (p) g+s sk fk i)
-       (if (match-steer-tree? protocol v)
+       (if (match-steer-non-empty-tree? protocol v)
            (if (match-steer-null-tree? protocol (match-steer-cdr protocol v))
                (let ((w (match-steer-car protocol v)))
                  (match-steer-one protocol w p
                    (w (match-steer-set-car! protocol v))
                    sk fk i))
                fk)
-           (assertion-violation 'match-steer
-             "input is not supported by this protocol" v)))
+           fk))
       ((match-steer-two protocol v (p *** q) g+s sk fk i)
        (match-extract-vars p (match-steer-gen-search protocol v p q g+s sk fk i) i ()))
       ((match-steer-two protocol v (p *** . q) g+s sk fk i)
@@ -298,7 +306,7 @@
       ;; Record-matching patterns ($ struct & object) are reserved for a
       ;; future design and disabled for now.
       ((match-steer-two protocol v (p . q) g+s sk fk i)
-       (if (match-steer-tree? protocol v)
+       (if (match-steer-non-empty-tree? protocol v)
            (let ((w (match-steer-car protocol v))
                  (x (match-steer-cdr protocol v)))
              (match-steer-one protocol w p
@@ -308,8 +316,7 @@
                  sk fk)
                fk
                i))
-           (assertion-violation 'match-steer
-             "input is not supported by this protocol" v)))
+           fk))
       ((match-steer-two protocol v #(p ...) g+s . x)
        (match-vector protocol v 0 () (p ...) . x))
       ;; Next line: replace '_' with ':_'. (FBE)
@@ -351,14 +358,13 @@
       ((_ protocol v () g+s sk fk i . depth)
        (match-steer-two protocol v () g+s sk fk i))
       ((_ protocol v (p . q) g+s sk fk i . depth)
-       (if (match-steer-tree? protocol v)
+       (if (match-steer-non-empty-tree? protocol v)
            (let ((w (match-steer-car protocol v))
                  (x (match-steer-cdr protocol v)))
              (match-steer-quasiquote protocol w p g+s
                (match-steer-quasiquote-step protocol x q g+s sk fk depth)
                fk i . depth))
-           (assertion-violation 'match-steer
-             "input is not supported by this protocol" v)))
+           fk))
       ((_ protocol v #(elt ...) g+s sk fk i . depth)
        (if (vector? v)
            (let ((ls (vector->list v)))
@@ -454,7 +460,7 @@
          (cond
           ((null? expect)
            (match-steer-one protocol ls r (#f #f) sk fk (i ...)))
-          ((match-steer-tree? protocol ls)
+          ((match-steer-non-empty-tree? protocol ls)
            (let ((w (match-steer-car protocol ls))
                  (e (car expect)))
              (if (equal? (match-steer-expression protocol w)
@@ -593,7 +599,7 @@
                                    sk))
                                 (next w fail id-ls ...) i)))
               (next (lambda (w fail id-ls ...)
-                      (if (not (match-steer-tree? protocol w))
+                      (if (not (match-steer-non-empty-tree? protocol w))
                           (fail)
                           (let ((u (match-steer-car protocol w)))
                             (match-steer-one
@@ -603,7 +609,7 @@
                               ;; the p pattern, and loop over the tail
                               (let ((id-ls (cons id id-ls)) ...)
                                 (let lp ((ls (match-steer-cdr protocol w)))
-                                  (if (match-steer-tree? protocol ls)
+                                  (if (match-steer-non-empty-tree? protocol ls)
                                       (try (match-steer-car protocol ls)
                                            (lambda () (lp (match-steer-cdr protocol ls)))
                                            id-ls ...)

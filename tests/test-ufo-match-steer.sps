@@ -101,14 +101,18 @@
      [('lambda (x) body) body]
      [else 'no-match])))
 
-;; Ordinary Scheme pairs/lists are never matched by a protocol matcher.
-(test-error "ordinary list rejected by tree-node protocol"
+;; Ordinary Scheme pairs/lists are not trees under a protocol matcher,
+;; so pair/ellipsis patterns on them fall through to the next clause,
+;; just as pair patterns on non-pair values fall through in ufo-match.
+(test-equal "ordinary list falls through pair pattern"
+  'no-match
   (match-steer tree-node-protocol
     '(1 2 3)
     [(a b c) (list b c)]
     [else 'no-match]))
 
-(test-error "ordinary list with ellipsis rejected"
+(test-equal "ordinary list falls through ellipsis pattern"
+  'no-match
   (match-steer tree-node-protocol
     '(1 2 3)
     [(a b ...) b]
@@ -345,6 +349,37 @@
     (leaf 'x)
     [() 'empty]
     [else 'non-empty]))
+
+;; Pair/list/quasiquote patterns on a tree-node with empty children
+;; should fall through to the next clause, not crash.
+(test-equal "pair pattern on empty children falls through"
+  'else
+  (match-steer tree-node-protocol
+    (leaf 'x)
+    [(_ y) 'matched]
+    [else 'else]))
+
+(test-equal "pair pattern with ellipsis on empty children falls through"
+  'else
+  (match-steer tree-node-protocol
+    (leaf 'x)
+    [(_ y ...) 'matched]
+    [else 'else]))
+
+(test-equal "quasiquote pair pattern on empty children falls through"
+  'else
+  (match-steer tree-node-protocol
+    (leaf 'x)
+    [`(,_ ,y) 'matched]
+    [else 'else]))
+
+(test-equal "empty children can still match a later clause"
+  'literal
+  (match-steer tree-node-protocol
+    (leaf 'x)
+    [(_ y) 'pair]
+    ['x 'literal]
+    [else 'else]))
 
 ;; Additional boundary and edge-case tests.
 
