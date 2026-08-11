@@ -134,7 +134,36 @@ Define a record and a matching protocol, then use `match-steer`:
 bash test.sh
 ```
 
-All 52 tests should pass.
+All 56 tests should pass.
+
+## Known issues
+
+- **`(p *** q)` may miss targets that are the first/only child of a node.**
+
+  The tree-search pattern only finds `q` when it lies on a path of *last*
+  children.  For example, with ordinary lists this corresponds to:
+
+  ```scheme
+  (match '(a (b (c target)))
+    [(p *** 'target) 'found]
+    [else 'else])
+  ;; => found
+
+  (match '(target)
+    [(p *** 'target) 'found]
+    [else 'else])
+  ;; => else        (expected: found)
+
+  (match '(target other)
+    [(p *** 'target) 'found]
+    [else 'else])
+  ;; => else        (expected: found)
+  ```
+
+  This is inherited from the upstream Alex Shinn `match` implementation on
+  which `ufo-match-steer` is based.  It is a limitation of the current
+  `match-gen-search` / `match-steer-gen-search` algorithm, not specific to
+  protocol trees.
 
 ## License
 
