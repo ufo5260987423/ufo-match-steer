@@ -4,3 +4,4 @@
 .vscode/
 2026*.txt
 *.so
+.scheme-langserver.log
