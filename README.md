@@ -1,7 +1,7 @@
 # ufo-match-steer
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version: 1.1.2](https://img.shields.io/badge/Version-1.1.2-green.svg)]()
+[![Version: 1.1.3](https://img.shields.io/badge/Version-1.1.3-green.svg)]()
 
 A generic pattern-matching library for Chez Scheme (R6RS).  It extends the
 Alex-Shinn-style `match` macro so that list/pair patterns can be applied to
@@ -167,7 +167,7 @@ All 62 tests should pass.
 
 ## Changelog
 
-### 1.1.2
+### 1.1.3
 
 - Fixed macro expansion error when `syntax` is used as a quoted literal
   pattern (e.g. `'syntax`) or as a pattern variable.  This was caused by
@@ -183,12 +183,11 @@ All 62 tests should pass.
   same variable in a pattern (e.g. `(a a)` or `(syntax syntax)`) are
   compared via the protocol's expression getter rather than comparing an
   expression to the bound node object.
-- Added regression tests for `syntax` literal/variable patterns.
 - Fixed `**1` (one-or-more repetition) so that it no longer matches
   empty protocol trees.  It now correctly requires at least one child
   element.
-- Added regression tests for `**1` wildcard matching on empty and
-  non-empty tree nodes.
+- Added regression tests for `syntax` literal/variable patterns and for
+  `**1` wildcard matching on empty and non-empty tree nodes.
 
 ## License
 
