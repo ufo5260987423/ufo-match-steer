@@ -248,6 +248,22 @@
   ;; multiple times) and IDS are the list of identifiers bound in the
   ;; pattern so far.
 
+  ;; Low-level helper: test whether the identifier A is one of the literal
+  ;; identifiers ID ... .  Returns IN-SK if it is, OUT-FK otherwise.
+  ;; This is factored out so that MATCH-STEER-TWO, MATCH-EXTRACT-VARS and
+  ;; MATCH-BOUND-IDENTIFIER-MEMV can share the same implementation.  The
+  ;; ID ... are placed in the inner syntax-rules' literal list so that
+  ;; identifiers coinciding with Chez core keywords (e.g. `syntax') are
+  ;; treated as ordinary literals rather than as macro keywords.
+  (define-syntax match-identifier-memv
+    (syntax-rules ()
+      ((_ a (id ...) in-sk out-fk)
+       (let-syntax ((memv?
+                     (syntax-rules (id ...)
+                       ((memv? id sk2 fk2) sk2) ...
+                       ((memv? anything-else sk2 fk2) fk2))))
+         (memv? a in-sk out-fk)))))
+
   (define-syntax match-steer-two
     (syntax-rules (:_ ___ **1 =.. *.. *** quote quasiquote ? := and or not set! get!)
       ((match-steer-two protocol v () g+s (sk ...) fk i)
@@ -328,15 +344,20 @@
       ((match-steer-two protocol v x g+s (sk ...) fk (id ...))
        (match-check-identifier
         x
-        (let-syntax
-            ((new-sym?
-              (syntax-rules (id ...)
-                ((new-sym? x sk2 fk2) sk2)
-                ((new-sym? y sk2 fk2) fk2))))
-          (new-sym? random-sym-to-match
-                    (let ((x v)) (sk ... (id ... x)))
-                    (if (equal? (match-steer-expression protocol v) x) (sk ... (id ...)) fk)))
-        (if (equal? (match-steer-expression protocol v) x) (sk ... (id ...)) fk)))
+        (match-identifier-memv
+         x
+         (id ...)
+         ;; x is already bound: compare its value
+         (if (equal? (match-steer-expression protocol v)
+                     (match-steer-expression protocol x))
+             (sk ... (id ...))
+             fk)
+         ;; x is a new identifier: bind it
+         (let ((x v)) (sk ... (id ... x))))
+        (if (equal? (match-steer-expression protocol v)
+                    (match-steer-expression protocol x))
+            (sk ... (id ...))
+            fk)))
       ))
 
   ;; QUASIQUOTE patterns
@@ -740,14 +761,16 @@
       ;; This is the main part, the only place where we might add a new
       ;; var if it's an unbound symbol.
       ((match-extract-vars p (k ...) (i ...) v)
-       (let-syntax
-           ((new-sym?
-             (syntax-rules (i ...)
-               ((new-sym? p sk fk) sk)
-               ((new-sym? any sk fk) fk))))
-         (new-sym? random-sym-to-match
-                   (k ... ((p p-ls) . v))
-                   (k ... v))))
+       (match-check-identifier
+        p
+        (match-identifier-memv
+         p
+         (i ...)
+         ;; p is already bound: do not add it
+         (k ... v)
+         ;; p is a new identifier: add it to the extracted vars
+         (k ... ((p p-ls) . v)))
+        (k ... v)))
       ))
 
   ;; Stepper used in the above so it can expand the CAR and CDR
@@ -786,55 +809,37 @@
       ))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  ;; This is a little more complicated, and introduces a new let-syntax,
-  ;; but should work portably in any R[56]RS Scheme.  Taylor Campbell
-  ;; originally came up with the idea.
+  ;; Check whether a pattern identifier is the ellipsis identifier `...'.
+  ;; We use syntax-case to avoid constructing an internal syntax-rules
+  ;; macro whose pattern variable would be the user's identifier (which
+  ;; fails when that identifier is `syntax', a core keyword).
   (define-syntax match-check-ellipsis
-    (syntax-rules ()
-      ;; these two aren't necessary but provide fast-case failures
-      ((match-check-ellipsis (a . b) success-k failure-k) failure-k)
-      ((match-check-ellipsis #(a ...) success-k failure-k) failure-k)
-      ;; matching an atom
-      ((match-check-ellipsis id success-k failure-k)
-       (let-syntax ((ellipsis? (syntax-rules ()
-                                 ;; iff `id' is `...' here then this will
-                                 ;; match a list of any length
-                                 ((ellipsis? (foo id) sk fk) sk)
-                                 ((ellipsis? other sk fk) fk))))
-         ;; this list of three elements will only match the (foo id) list
-         ;; above if `id' is `...'
-         (ellipsis? (a b c) success-k failure-k)))))
+    (lambda (stx)
+      (syntax-case stx ()
+        ((_ id success-k failure-k)
+         (if (and (identifier? #'id)
+                  (free-identifier=? #'id (datum->syntax #'stx '...)))
+             #'success-k
+             #'failure-k)))))
 
-  ;; This is portable but can be more efficient with non-portable
-  ;; extensions.  This trick was originally discovered by Oleg Kiselyov.
+  ;; Check whether a pattern element is an identifier.  We use syntax-case
+  ;; rather than the nested-syntax-rules trick for the same reason as above.
   (define-syntax match-check-identifier
-    (syntax-rules ()
-      ;; fast-case failures, lists and vectors are not identifiers
-      ((_ (x . y) success-k failure-k) failure-k)
-      ((_ #(x ...) success-k failure-k) failure-k)
-      ;; x is an atom
-      ((_ x success-k failure-k)
-       (let-syntax
-           ((sym?
-             (syntax-rules ()
-               ;; if the symbol `abracadabra' matches x, then x is a
-               ;; symbol
-               ((sym? x sk fk) sk)
-               ;; otherwise x is a non-symbol datum
-               ((sym? y sk fk) fk))))
-         (sym? abracadabra success-k failure-k)))))
+    (lambda (stx)
+      (syntax-case stx ()
+        ((_ x success-k failure-k)
+         (if (identifier? #'x)
+             #'success-k
+             #'failure-k)))))
 
-  ;; Variant of above for a list of ids.
+  ;; Variant of the above for a list of ids.  Delegates to the shared
+  ;; MATCH-IDENTIFIER-MEMV helper so that identifiers such as `syntax' are
+  ;; handled as ordinary literals.
   (define-syntax match-bound-identifier-memv
     (syntax-rules ()
       ((match-bound-identifier-memv a (id ...) sk fk)
        (match-check-identifier
         a
-        (let-syntax
-            ((memv?
-              (syntax-rules (id ...)
-                ((memv? a sk2 fk2) fk2)
-                ((memv? anything-else sk2 fk2) sk2))))
-          (memv? random-sym-to-match sk fk))
+        (match-identifier-memv a (id ...) sk fk)
         fk))))
 )

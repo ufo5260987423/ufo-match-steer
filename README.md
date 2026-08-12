@@ -1,7 +1,7 @@
 # ufo-match-steer
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version: 1.1.1](https://img.shields.io/badge/Version-1.1.1-green.svg)]()
+[![Version: 1.1.2](https://img.shields.io/badge/Version-1.1.2-green.svg)]()
 
 A generic pattern-matching library for Chez Scheme (R6RS).  It extends the
 Alex-Shinn-style `match` macro so that list/pair patterns can be applied to
@@ -134,7 +134,7 @@ Define a record and a matching protocol, then use `match-steer`:
 bash test.sh
 ```
 
-All 56 tests should pass.
+All 60 tests should pass.
 
 ## Known issues
 
@@ -164,6 +164,26 @@ All 56 tests should pass.
   which `ufo-match-steer` is based.  It is a limitation of the current
   `match-gen-search` / `match-steer-gen-search` algorithm, not specific to
   protocol trees.
+
+## Changelog
+
+### 1.1.2
+
+- Fixed macro expansion error when `syntax` is used as a quoted literal
+  pattern (e.g. `'syntax`) or as a pattern variable.  This was caused by
+  nested `syntax-rules` tricks that placed the user's identifier into the
+  rule header of an inner macro; Chez Scheme treats `syntax` as a core
+  keyword in that position.  The affected helpers
+  (`match-check-ellipsis`, `match-check-identifier`,
+  `match-bound-identifier-memv`, and the variable-binding code in
+  `match-steer-two` / `match-extract-vars`) now use `syntax-case` or a
+  shared `match-identifier-memv` helper that keeps the identifier in the
+  literal list instead.
+- Fixed bound-variable comparison so that repeated occurrences of the
+  same variable in a pattern (e.g. `(a a)` or `(syntax syntax)`) are
+  compared via the protocol's expression getter rather than comparing an
+  expression to the bound node object.
+- Added regression tests for `syntax` literal and variable patterns.
 
 ## License
 

@@ -569,6 +569,36 @@
      [('lambda params body) body]
      [else 'no-match])))
 
+;; Regression tests: `syntax' is a Chez core keyword, so it must still be
+;; usable as an ordinary literal or variable pattern with a protocol.
+(test-equal "literal syntax in dotted pair pattern"
+  'matched
+  (match-steer tree-node-protocol
+    (tn '(syntax x) (leaf 'syntax) (leaf 'x))
+    [('syntax . :_) 'matched]
+    [else 'else]))
+
+(test-equal "literal syntax in fixed list pattern"
+  'matched
+  (match-steer tree-node-protocol
+    (tn '(syntax x) (leaf 'syntax) (leaf 'x))
+    [('syntax :_) 'matched]
+    [else 'else]))
+
+(test-equal "syntax as variable in dotted pair pattern"
+  'matched
+  (match-steer tree-node-protocol
+    (tn '(syntax x) (leaf 'syntax) (leaf 'x))
+    [(syntax . :_) 'matched]
+    [else 'else]))
+
+(test-equal "syntax as variable in fixed list pattern"
+  'matched
+  (match-steer tree-node-protocol
+    (tn '(syntax syntax) (leaf 'syntax) (leaf 'syntax))
+    [(syntax syntax) 'matched]
+    [else 'else]))
+
 (test-end)
 
 (exit (if (zero? (test-runner-fail-count (test-runner-get))) 0 1))
