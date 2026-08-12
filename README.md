@@ -134,7 +134,7 @@ Define a record and a matching protocol, then use `match-steer`:
 bash test.sh
 ```
 
-All 60 tests should pass.
+All 62 tests should pass.
 
 ## Known issues
 
@@ -183,7 +183,12 @@ All 60 tests should pass.
   same variable in a pattern (e.g. `(a a)` or `(syntax syntax)`) are
   compared via the protocol's expression getter rather than comparing an
   expression to the bound node object.
-- Added regression tests for `syntax` literal and variable patterns.
+- Added regression tests for `syntax` literal/variable patterns.
+- Fixed `**1` (one-or-more repetition) so that it no longer matches
+  empty protocol trees.  It now correctly requires at least one child
+  element.
+- Added regression tests for `**1` wildcard matching on empty and
+  non-empty tree nodes.
 
 ## License
 

@@ -308,7 +308,7 @@
       ((match-steer-two protocol v (p *** . q) g+s sk fk i)
        (match-syntax-error "invalid use of ***" (p *** . q)))
       ((match-steer-two protocol v (p **1) g+s sk fk i)
-       (if (match-steer-tree? protocol v)
+       (if (match-steer-non-empty-tree? protocol v)
            (match-steer-one protocol v (p ___) g+s sk fk i)
            fk))
       ((match-steer-two protocol v (p =.. n . r) g+s sk fk i)

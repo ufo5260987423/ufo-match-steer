@@ -228,6 +228,20 @@
     [(a **1) 'non-empty]
     [else 'empty]))
 
+(test-equal "**1 wildcard does not match empty tree-node"
+  'else
+  (match-steer tree-node-protocol
+    (leaf 'x)
+    [(:_ **1) 'matched]
+    [else 'else]))
+
+(test-equal "**1 wildcard matches non-empty tree-node"
+  'matched
+  (match-steer tree-node-protocol
+    (tn 'expr (leaf 'a) (leaf 'b))
+    [(:_ **1) 'matched]
+    [else 'else]))
+
 (test-equal "=.. exact repetition"
   '(a a a)
   (node-exprs
