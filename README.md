@@ -183,6 +183,11 @@ All 62 tests should pass.
   same variable in a pattern (e.g. `(a a)` or `(syntax syntax)`) are
   compared via the protocol's expression getter rather than comparing an
   expression to the bound node object.
+- Fixed ellipsis patterns `(p ...)` and `(p **1)` on protocol nodes so
+  that the variable `p` binds to the list of children rather than to the
+  whole node object.  This makes the behavior consistent with ordinary
+  `match` ellipsis semantics and with positional decomposition patterns
+  such as `(p1 p2 p3)`.
 - Fixed `**1` (one-or-more repetition) so that it no longer matches
   empty protocol trees.  It now correctly requires at least one child
   element.

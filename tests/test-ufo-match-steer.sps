@@ -213,9 +213,9 @@
     [(x *** 'target) 'found]
     [else 'not-found]))
 
-(test-equal "**1 non-empty repetition matches whole value"
+(test-equal "**1 non-empty repetition binds children list"
   '(a x y)
-  (tree-node-expression
+  (map tree-node-expression
    (match-steer tree-node-protocol
      (tn '(a x y) (leaf 'a) (leaf 'x) (leaf 'y))
      [(a **1) a]
@@ -543,13 +543,12 @@
     [(a ...) a]
     [else 'no-match]))
 
-(test-equal "ellipsis on empty tree-node children binds whole node"
-  'x
-  (tree-node-expression
-   (match-steer tree-node-protocol
-     (leaf 'x)
-     [(a ...) a]
-     [else 'no-match])))
+(test-equal "ellipsis on empty tree-node children binds empty children list"
+  '()
+  (match-steer tree-node-protocol
+    (leaf 'x)
+    [(a ...) a]
+    [else 'no-match]))
 
 (test-equal "large ellipsis matching does not overflow"
   100

@@ -452,10 +452,12 @@
     ((_ protocol v p () g+s (sk ...) fk i ((id id-ls) ...))
      (match-check-identifier p
        ;; simplest case equivalent to (p ...), just match the list
-       (let ((w (if (match-tail? v) (match-tail-elements v) v)))
-         (if (match-steer-list? protocol v)
-             (match-steer-one protocol w p g+s (sk ...) fk i)
-             fk))
+       (if (match-steer-list? protocol v)
+           (let ((w (if (match-tail? v)
+                        (match-tail-elements v)
+                        ((match-protocol-children-getter protocol) v))))
+             (match-steer-one protocol w p g+s (sk ...) fk i))
+           fk)
        ;; simple case, match all elements of the list
        (let loop ((ls v) (id-ls '()) ...)
          (cond
