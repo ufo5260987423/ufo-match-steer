@@ -1,7 +1,7 @@
 #!r6rs ; -*- mode: scheme; coding: utf-8 -*-
 (import (akku format manifest))
 
-(akku-package ("ufo-match-steer" "1.1.3")
+(akku-package ("ufo-match-steer" "1.1.4")
   (synopsis "Generic pattern matching over arbitrary tree structures")
   (description
    "A match macro extension that allows Alex Shinn style list/pair patterns"
