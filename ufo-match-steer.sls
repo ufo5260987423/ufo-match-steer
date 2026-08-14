@@ -311,6 +311,10 @@
        (if (match-steer-non-empty-tree? protocol v)
            (match-steer-one protocol v (p ___) g+s sk fk i)
            fk))
+      ((match-steer-two protocol v (p **1 . r) g+s sk fk i)
+       (if (match-steer-non-empty-tree? protocol v)
+           (match-steer-one protocol v (p ___ . r) g+s sk fk i)
+           fk))
       ((match-steer-two protocol v (p =.. n . r) g+s sk fk i)
        (match-extract-vars
         p

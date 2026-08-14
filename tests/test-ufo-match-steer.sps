@@ -42,6 +42,11 @@
 (define (leaf expr)
   (make-tree-node expr '()))
 
+;; Helper predicate for tests that match on symbol-expression children.
+(define (tree-node-symbol? node)
+  (and (tree-node? node)
+       (symbol? (tree-node-expression node))))
+
 ;; Helper to compare tree-node expressions in assertions.
 (define (node-exprs nodes)
   (map tree-node-expression nodes))
@@ -610,6 +615,31 @@
   (match-steer tree-node-protocol
     (tn '(syntax syntax) (leaf 'syntax) (leaf 'syntax))
     [(syntax syntax) 'matched]
+    [else 'else]))
+
+;; Regression tests: `**1' must support trailing patterns just like `...'
+;; and `___', rather than being silently treated as an ordinary variable.
+(test-equal "star1 with trailing pattern binds repeated middle children"
+  '(a (b c) d)
+  (match-steer tree-node-protocol
+    (tn '(a b c d) (leaf 'a) (leaf 'b) (leaf 'c) (leaf 'd))
+    [(a b **1 c) (list (tree-node-expression a) (map tree-node-expression b) (tree-node-expression c))]
+    [else 'else]))
+
+(test-equal "star1 with trailing pattern and predicate"
+  '(a (b c) d)
+  (match-steer tree-node-protocol
+    (tn '(a b c d) (leaf 'a) (leaf 'b) (leaf 'c) (leaf 'd))
+    [(a (? tree-node-symbol? b) **1 c)
+     (list (tree-node-expression a) (map tree-node-expression b) (tree-node-expression c))]
+    [else 'else]))
+
+(test-equal "star1 with trailing pattern nested under wildcard and predicate"
+  '(b (c) d)
+  (match-steer tree-node-protocol
+    (tn 'outer (tn '(a b c d) (leaf 'a) (leaf 'b) (leaf 'c) (leaf 'd)))
+    [((:_ (? tree-node-symbol? head-node) rest **1 tail))
+     (list (tree-node-expression head-node) (map tree-node-expression rest) (tree-node-expression tail))]
     [else 'else]))
 
 (test-end)

@@ -1,7 +1,7 @@
 # ufo-match-steer
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version: 1.1.4](https://img.shields.io/badge/Version-1.1.4-green.svg)]()
+[![Version: 1.1.5](https://img.shields.io/badge/Version-1.1.5-green.svg)]()
 
 A generic pattern-matching library for Chez Scheme (R6RS).  It extends the
 Alex-Shinn-style `match` macro so that list/pair patterns can be applied to
@@ -134,7 +134,7 @@ Define a record and a matching protocol, then use `match-steer`:
 bash test.sh
 ```
 
-All 62 tests should pass.
+All 65 tests should pass.
 
 ## Known issues
 
@@ -166,6 +166,18 @@ All 62 tests should pass.
   protocol trees.
 
 ## Changelog
+
+### 1.1.5
+
+- Fixed `**1` (one-or-more repetition) so that it also supports trailing
+  patterns, just like `...` and `___`.  Previously patterns such as
+  `(a b **1 c)` or nested forms like
+  `((:_ (? pred head-node) rest **1 tail))` were silently misinterpreted:
+  `**1` was treated as an ordinary variable and the repetition was lost.
+  Now `**1` correctly greedily matches one or more elements while leaving
+  the remaining trailing patterns to be matched as usual.
+- Added regression tests for `**1` with trailing patterns, including nested
+  combinations with `?` predicates and the `:_` wildcard.
 
 ### 1.1.4
 
