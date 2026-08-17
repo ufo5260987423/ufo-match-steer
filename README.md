@@ -128,6 +128,31 @@ Define a record and a matching protocol, then use `match-steer`:
 | `(set! s)` | bind setter |
 | `(get! g)` | bind getter |
 
+## Mutability and `set!`
+
+`set!` binds a setter procedure that mutates the matched location through the
+protocol's `first-child-setter` / `rest-children-setter`.  The matcher itself
+only replaces the child reference in the parent node; it does **not** enforce
+any structural invariants of your record type.
+
+If your nodes maintain an isomorphism between the `expression` field and the
+`children` list — or if they store back-references such as a `parent` field —
+your setter is responsible for keeping those invariants intact.
+
+For example, if `index-node` has a `parent` field, a custom setter might look
+like:
+
+```scheme
+(define (set-index-node-first-child! node new-child)
+  (let ([old-child (car (index-node-children node))])
+    (set-index-node-parent! old-child #f)
+    (set-index-node-parent! new-child node)
+    (set-index-node-children! node (cons new-child (cdr (index-node-children node))))))
+```
+
+Likewise, after replacing children you may need to rebuild the node's
+`expression` so that it stays isomorphic to the new child structure.
+
 ## Running tests
 
 ```bash
