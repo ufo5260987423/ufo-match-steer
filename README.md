@@ -1,7 +1,7 @@
 # ufo-match-steer
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version: 1.1.4](https://img.shields.io/badge/Version-1.1.4-green.svg)]()
+[![Version: 1.1.6](https://img.shields.io/badge/Version-1.1.6-green.svg)]()
 
 A generic pattern-matching library for Chez Scheme (R6RS).  It extends the
 Alex-Shinn-style `match` macro so that list/pair patterns can be applied to
@@ -192,7 +192,7 @@ All 62 tests should pass.
 
 ## Changelog
 
-### Unreleased
+### 1.1.6
 
 - Updated `match-check-ellipsis` to recognize `___` as an ellipsis
   identifier in addition to `...`.  This makes the handling of `(p ___)`
