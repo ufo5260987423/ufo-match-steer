@@ -811,16 +811,18 @@
       ))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  ;; Check whether a pattern identifier is the ellipsis identifier `...'.
-  ;; We use syntax-case to avoid constructing an internal syntax-rules
-  ;; macro whose pattern variable would be the user's identifier (which
-  ;; fails when that identifier is `syntax', a core keyword).
+  ;; Check whether a pattern identifier is an ellipsis identifier (`...'
+  ;; or `___').  We use syntax-case to avoid constructing an internal
+  ;; syntax-rules macro whose pattern variable would be the user's
+  ;; identifier (which fails when that identifier is `syntax', a core
+  ;; keyword).
   (define-syntax match-check-ellipsis
     (lambda (stx)
       (syntax-case stx ()
         ((_ id success-k failure-k)
          (if (and (identifier? #'id)
-                  (free-identifier=? #'id (datum->syntax #'stx '...)))
+                  (or (free-identifier=? #'id (datum->syntax #'stx '...))
+                      (free-identifier=? #'id (datum->syntax #'stx '___))))
              #'success-k
              #'failure-k)))))
 

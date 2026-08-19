@@ -192,6 +192,15 @@ All 62 tests should pass.
 
 ## Changelog
 
+### Unreleased
+
+- Updated `match-check-ellipsis` to recognize `___` as an ellipsis
+  identifier in addition to `...`.  This makes the handling of `(p ___)`
+  consistent everywhere in the matcher and ensures that the `(p **1)`
+  implementation, which expands to `(p ___)`, is resolved as an ellipsis
+  directly.
+- Added regression test for `**1` in a nested list-pattern position.
+
 ### 1.1.4
 
 - Fixed macro expansion error when `syntax` is used as a quoted literal

@@ -242,6 +242,26 @@
     [(:_ **1) 'matched]
     [else 'else]))
 
+(test-equal "**1 in nested position binds children list"
+  '(x y)
+  (node-exprs
+   (match-steer tree-node-protocol
+     (tn '(lambda (x y) (+ x y))
+         (leaf 'lambda)
+         (tn '(x y) (leaf 'x) (leaf 'y))
+         (tn '(+ x y) (leaf '+) (leaf 'x) (leaf 'y)))
+     [(:_ (x **1) . body)
+      x]
+     [else 'no-match])))
+
+(test-equal "___ ellipsis binds children list"
+  '(a x y)
+  (map tree-node-expression
+   (match-steer tree-node-protocol
+     (tn '(a x y) (leaf 'a) (leaf 'x) (leaf 'y))
+     [(a ___) a]
+     [else 'no-match])))
+
 (test-equal "=.. exact repetition"
   '(a a a)
   (node-exprs
